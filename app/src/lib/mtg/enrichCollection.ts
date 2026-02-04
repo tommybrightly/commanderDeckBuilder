@@ -1,14 +1,13 @@
 import type { OwnedCard } from "./types";
 import { parseTextList, parseCsv } from "./parseCollection";
-import { getCardsByNamesFromDb, upsertCardFromScryfall } from "./cardDb";
-import { getCardInfoListBatched } from "./cardDataService";
+import { getCardsByNamesFromDb } from "./cardDb";
 import { prisma } from "@/lib/prisma";
 
 export type EnrichProgress = (done: number, total: number, message?: string) => void;
 
 /**
- * Parse rawInput to OwnedCard[], resolve each to a Card in DB (or fetch from Scryfall and insert),
- * then upsert CollectionItem rows. Call onProgress as we go.
+ * Parse rawInput to OwnedCard[], resolve each to a Card in DB only,
+ * then upsert CollectionItem rows. No Scryfall—card DB must be synced first (Settings → Sync card database).
  */
 export async function enrichCollection(
   collectionId: string,
@@ -22,21 +21,17 @@ export async function enrichCollection(
   const totalCards = owned.reduce((s, c) => s + c.quantity, 0);
 
   onProgress?.(0, uniqueNames.length, "Resolving cards from database…");
-  const fromDb = await getCardsByNamesFromDb(uniqueNames);
-  const missing = uniqueNames.filter((n) => !fromDb.has(n.toLowerCase()));
+  const allCards = await getCardsByNamesFromDb(uniqueNames);
+  const missing = uniqueNames.filter((n) => !allCards.has(n.toLowerCase()));
 
   if (missing.length > 0) {
-    onProgress?.(fromDb.size, uniqueNames.length, `Fetching ${missing.length} cards from Scryfall…`);
-    const fromScryfall = await getCardInfoListBatched(missing, (fetched, total) => {
-      onProgress?.(fromDb.size + fetched, uniqueNames.length, `Fetched ${fetched}/${total} from Scryfall`);
-    });
-    for (const [, info] of fromScryfall) {
-      await upsertCardFromScryfall(info);
-    }
+    const list = missing.length <= 5 ? missing.join(", ") : `${missing.slice(0, 5).join(", ")} and ${missing.length - 5} more`;
+    throw new Error(
+      `Some cards weren't found in the card database: ${list}. Sync the card database from Settings first, or check exact card names (e.g. "Sol Ring", "Lightning Bolt").`
+    );
   }
 
   onProgress?.(uniqueNames.length, uniqueNames.length, "Saving collection items…");
-  const allCards = await getCardsByNamesFromDb(uniqueNames);
   const oracleIds = [...new Set([...allCards.values()].map((c) => c.id))];
   const cardRows =
     oracleIds.length > 0
@@ -55,6 +50,12 @@ export async function enrichCollection(
     const cardId = oracleToDbId.get(info.id);
     if (!cardId) continue;
     byCardId.set(cardId, (byCardId.get(cardId) ?? 0) + o.quantity);
+  }
+
+  if (byCardId.size === 0) {
+    throw new Error(
+      "No card names could be resolved. Sync the card database from Settings, then try again. Use exact card names (e.g. 'Sol Ring', 'Lightning Bolt')."
+    );
   }
 
   for (const [cardId, quantity] of byCardId) {

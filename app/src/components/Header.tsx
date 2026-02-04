@@ -27,6 +27,12 @@ export function Header() {
           >
             My Decks
           </Link>
+          <Link
+            href="/settings"
+            className="text-sm text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+          >
+            Settings
+          </Link>
           <AuthButton />
         </nav>
       </div>

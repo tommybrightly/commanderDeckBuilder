@@ -7,7 +7,7 @@ import type {
   DeckList,
   OwnedCard,
 } from "./types";
-import { fetchCardByName, getCardInfoListBatched } from "./cardDataService";
+import { getCardsByNamesFromDb, getCardByNameFromDb } from "./cardDb";
 
 const COMMANDER_BANLIST = new Set(
   [
@@ -48,10 +48,11 @@ function assignRole(card: CardInfo): CardRole {
   return "utility";
 }
 
-function colorIdentityMatches(identity: string[], card: CardInfo): boolean {
-  const cardId = new Set(card.colorIdentity ?? []);
-  for (const c of identity) {
-    if (!cardId.has(c)) return false;
+/** Commander rule: card is legal if every color in its identity is in the commander's identity. */
+function colorIdentityMatches(commanderIdentity: string[], card: CardInfo): boolean {
+  const allowed = new Set(commanderIdentity);
+  for (const c of card.colorIdentity ?? []) {
+    if (!allowed.has(c)) return false;
   }
   return true;
 }
@@ -86,17 +87,20 @@ export async function buildDeck(params: {
     cardInfos = preloadedCardInfos;
   } else {
     const uniqueNames = [...new Set(owned.map((c) => c.name))];
-    onProgress?.("fetching", 0, `Fetching ${uniqueNames.length} cards…`);
-    cardInfos = await getCardInfoListBatched(uniqueNames, (fetched, total) => {
-      onProgress?.("fetching", total > 0 ? fetched / total : 0, `Fetched ${fetched}/${total} cards`);
-    });
+    onProgress?.("fetching", 0, "Loading cards from database…");
+    cardInfos = await getCardsByNamesFromDb(uniqueNames);
+    const missing = uniqueNames.filter((n) => !cardInfos.has(n.toLowerCase()));
+    if (missing.length > 0) {
+      const list = missing.length <= 5 ? missing.join(", ") : `${missing.slice(0, 5).join(", ")} and ${missing.length - 5} more`;
+      throw new Error(`Cards not in database: ${list}. Sync the card database from Settings first.`);
+    }
     onProgress?.("fetching", 1, "Cards loaded");
   }
 
   const commanderInfo = preloadedCardInfos?.get(commander.name.toLowerCase())
-    ?? await fetchCardByName(commander.name);
+    ?? await getCardByNameFromDb(commander.name);
   if (!commanderInfo) {
-    throw new Error(`Commander not found: ${commander.name}`);
+    throw new Error(`Commander not found: ${commander.name}. Sync the card database from Settings if you don't see commanders when searching.`);
   }
   onProgress?.("building", 0.5, "Building deck…");
 
@@ -114,6 +118,18 @@ export async function buildDeck(params: {
     candidateEntries.push({ card, owned: o, role: assignRole(card) });
   }
 
+  const nonlandCandidates = candidateEntries.filter((e) => e.role !== "land");
+  if (nonlandCandidates.length === 0) {
+    if (owned.length === 0) {
+      throw new Error(
+        "No cards in your collection could be used. Sync the card database from Settings, then try again."
+      );
+    }
+    throw new Error(
+      "No nonland cards from your collection match this commander's color identity (or legality). Add nonland cards in the commander's colors, or turn off legality for casual play."
+    );
+  }
+
   const used = new Set<string>();
   const main: CardInDeck[] = [];
   const landSlots: CardInDeck[] = [];
@@ -121,7 +137,6 @@ export async function buildDeck(params: {
   const targetDraw = 8;
   const targetRemoval = 8;
   const targetSweeper = 3;
-  const targetLands = 37;
 
   const byRole = (r: CardRole) =>
     candidateEntries.filter((e) => e.role === r && !used.has(e.card.name.toLowerCase()));
@@ -148,13 +163,13 @@ export async function buildDeck(params: {
 
   const landCandidates = candidateEntries.filter((e) => e.role === "land" && !used.has(e.card.name.toLowerCase()));
   const landByCmc = [...landCandidates].sort((a, b) => a.card.cmc - b.card.cmc);
+  const landSlotsTarget = 99 - main.length;
   for (const e of landByCmc) {
-    if (landSlots.length >= targetLands) break;
+    if (landSlots.length >= landSlotsTarget) break;
     used.add(e.card.name.toLowerCase());
     landSlots.push(cardToDeckEntry(e.card, "land"));
   }
 
-  const needLands = targetLands - landSlots.length;
   const colorToBasic: Record<string, string> = {
     W: "Plains",
     U: "Island",
@@ -163,7 +178,8 @@ export async function buildDeck(params: {
     G: "Forest",
   };
   const basicsInIdentity = identity.map((c) => colorToBasic[c]).filter(Boolean);
-  for (let i = 0; i < needLands && basicsInIdentity.length > 0; i++) {
+  const needBasics = 99 - main.length - landSlots.length;
+  for (let i = 0; i < needBasics && basicsInIdentity.length > 0; i++) {
     landSlots.push({
       name: basicsInIdentity[i % basicsInIdentity.length]!,
       quantity: 1,

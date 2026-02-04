@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { buildDeck } from "@/lib/mtg/deckBuilderEngine";
 import { parseTextList, parseCsv } from "@/lib/mtg/parseCollection";
 import { enrichCollection } from "@/lib/mtg/enrichCollection";
-import { dbCardToCardInfo } from "@/lib/mtg/cardDb";
+import { dbCardToCardInfo, getCardsByNamesFromDb, getCardByNameFromDb } from "@/lib/mtg/cardDb";
 import type { CommanderChoice } from "@/lib/mtg/types";
 import type { CardInfo } from "@/lib/mtg/types";
 
@@ -104,6 +104,15 @@ export async function POST(req: Request) {
             where: { collectionId },
             include: { card: true },
           });
+          if (items.length === 0) {
+            send({
+              type: "error",
+              error:
+                "No cards in this collection. Sync the card database from Settings, then build again.",
+            });
+            controller.close();
+            return;
+          }
           owned = items.map((i) => ({ name: i.card.name, quantity: i.quantity }));
           cardInfos = new Map(
             items.map((i) => [
@@ -111,6 +120,20 @@ export async function POST(req: Request) {
               dbCardToCardInfo(i.card as Parameters<typeof dbCardToCardInfo>[0]),
             ])
           );
+        } else if (typeof rawInput === "string" && owned.length > 0) {
+          const uniqueNames = [...new Set(owned.map((c) => c.name.trim()).filter(Boolean))];
+          const fromDb = await getCardsByNamesFromDb(uniqueNames);
+          const missing = uniqueNames.filter((n) => !fromDb.has(n.toLowerCase()));
+          if (missing.length > 0) {
+            const list = missing.length <= 5 ? missing.join(", ") : `${missing.slice(0, 5).join(", ")} and ${missing.length - 5} more`;
+            send({
+              type: "error",
+              error: `Cards not in database: ${list}. Sync the card database from Settings first.`,
+            });
+            controller.close();
+            return;
+          }
+          cardInfos = fromDb;
         }
 
         const deckList = await buildDeck({

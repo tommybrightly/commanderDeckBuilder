@@ -1,4 +1,4 @@
-import type { CardInfo } from "./types";
+import type { CardInfo, CommanderChoice } from "./types";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma/client";
 
@@ -81,6 +81,30 @@ export async function getCardsByNamesFromDb(names: string[]): Promise<Map<string
     out.set(row.name.toLowerCase(), info);
   }
   return out;
+}
+
+/** Search for commanders (legendary creatures or "can be your commander" planeswalkers) by name. */
+export async function searchCommandersInDb(query: string): Promise<CommanderChoice[]> {
+  const q = query.trim();
+  if (!q) return [];
+  const namePattern = `%${q.replace(/%/g, "\\%").replace(/_/g, "\\_")}%`;
+  const rows = await prisma.$queryRaw<CardRow[]>`
+    SELECT * FROM Card
+    WHERE (
+      (LOWER("typeLine") LIKE '%legendary%' AND LOWER("typeLine") LIKE '%creature%')
+      OR (LOWER("typeLine") LIKE '%planeswalker%' AND LOWER(COALESCE("oracleText", '')) LIKE '%can be your commander%')
+    )
+    AND LOWER(name) LIKE LOWER(${namePattern})
+    ORDER BY name
+    LIMIT 20
+  `;
+  return rows.map((r) => ({
+    id: r.oracleId,
+    name: r.name,
+    colorIdentity: parseJsonArray(r.colorIdentity),
+    imageUrl: r.imageUrl ?? undefined,
+    typeLine: r.typeLine,
+  }));
 }
 
 /** Upsert a card from Scryfall (e.g. after fetching via API). Uses oracleId (CardInfo.id) as unique key. */

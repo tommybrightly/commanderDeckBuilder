@@ -25,15 +25,9 @@ Build a 100-card Commander deck from the bulk cards you own. Sign in with Google
    npx prisma migrate dev
    ```
 
-3. **Scryfall card store (recommended for production)**
+3. **Card database (required before building decks)**
 
-   The app can use a local copy of Scryfall’s oracle card data so builds don’t depend on live API calls. Run once (and optionally on a schedule):
-
-   ```bash
-   npm run seed-cards
-   ```
-
-   This downloads Scryfall’s bulk oracle cards (~170MB gzip) and upserts them into the `Card` table. After that, most card lookups are served from your DB. Any card not in the DB is still fetched from Scryfall on demand and stored for future use.
+   All card data is stored in your DB. **No Scryfall calls** happen during deck building or commander search. After running the app, go to **Settings** and click **Sync card database**. That downloads Scryfall’s bulk oracle cards once into the `Card` table. Run it again periodically to stay updated. Until you sync, commander search and deck building will fail with a clear message to sync first.
 
 4. **Auth (Google OAuth)**
 
@@ -47,16 +41,24 @@ Build a 100-card Commander deck from the bulk cards you own. Sign in with Google
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). Sign in with Google, then use **Collections** to add your card list, **Build** to pick a collection and commander and generate a deck, and **My Decks** to view saved decks.
+Open [http://localhost:3000](http://localhost:3000). Sign in with Google, go to **Settings** and **Sync card database** once, then use **Collections** to add your card list, **Build** to pick a collection and commander and generate a deck, and **My Decks** to view saved decks.
 
 ## How it works
 
-- **Card store:** Card data is read from your DB (`Card` table). Populate it with `npm run seed-cards` (Scryfall bulk import). Missing cards are fetched from Scryfall and saved for next time.
-- **Enrichment:** The first time you build a deck from a collection, the app “enriches” it: it resolves each card name to a row in `Card` (or fetches from Scryfall and inserts) and saves `CollectionItem` rows. Later builds from that collection use only the DB, so they’re fast.
+- **Card store:** All card data lives in your DB (`Card` table). Sync from **Settings** (one-time or periodic). Deck building and commander search use only this local data—no Scryfall calls during normal use.
+- **Enrichment:** The first time you build from a collection, the app resolves each card name to a row in `Card` and saves `CollectionItem` rows. If any name isn’t in the DB, you’ll be told to sync first.
 - **Deck building:** The engine picks cards from your (enriched) collection by role and curve and obeys the legality toggle.
+
+## Hosting
+
+You can deploy this app to any host that runs Node and supports SQLite or Postgres.
+
+- **Vercel:** Works for the app, but serverless timeouts (e.g. 60s) may cut off the first **Sync card database** run (it can take 2–5 minutes). Options: (1) Run sync once locally, then copy `prisma/dev.db` into your project and deploy (not ideal for Vercel’s read-only filesystem), or (2) Use a plan with longer function timeout and run sync from the deployed app.
+- **Railway / Render / Fly.io:** Good fit. Persistent disk for SQLite, longer request timeouts. Run **Sync card database** from Settings after deploy. Optionally re-run periodically (e.g. monthly) or add a cron that calls `POST /api/cards/sync`.
+- **Database:** For production you may switch `DATABASE_URL` to Postgres (e.g. Railway Postgres, Neon) and run `prisma migrate deploy`. The card sync and all features work the same.
 
 ## Tech
 
 - Next.js 16 (App Router), TypeScript, Tailwind
 - NextAuth (Google), Prisma 7 + SQLite
-- Local Scryfall-derived card store; optional bulk import; in-app parser for text/CSV; deckbuilder with role/curve heuristics and legality toggle.
+- Local card store (synced from Scryfall in-app); text/CSV parser; deckbuilder with role/curve heuristics and legality toggle.
