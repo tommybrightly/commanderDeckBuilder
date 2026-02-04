@@ -20,3 +20,22 @@ export async function GET(
   }
   return NextResponse.json(deck);
 }
+
+export async function DELETE(
+  _req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const { id } = await params;
+  const deck = await prisma.deck.findFirst({
+    where: { id, userId: session.user.id },
+  });
+  if (!deck) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+  await prisma.deck.delete({ where: { id } });
+  return new NextResponse(null, { status: 204 });
+}

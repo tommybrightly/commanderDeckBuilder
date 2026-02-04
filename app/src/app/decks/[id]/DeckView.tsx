@@ -1,8 +1,10 @@
 "use client";
 
-import type { DeckList } from "@/lib/mtg/types";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 
 interface DeckViewProps {
+  deckId: string;
   commanderName: string;
   data: {
     commander?: { name: string; imageUrl?: string };
@@ -14,7 +16,9 @@ interface DeckViewProps {
   legalityEnforced: boolean;
 }
 
-export function DeckView({ commanderName, data, legalityEnforced }: DeckViewProps) {
+export function DeckView({ deckId, commanderName, data, legalityEnforced }: DeckViewProps) {
+  const router = useRouter();
+  const [deleting, setDeleting] = useState(false);
   const main = data?.main ?? [];
   const lands = data?.lands ?? [];
   const stats = data?.stats;
@@ -47,6 +51,18 @@ export function DeckView({ commanderName, data, legalityEnforced }: DeckViewProp
     URL.revokeObjectURL(url);
   };
 
+  const handleDelete = async () => {
+    if (!confirm(`Delete this deck (“${commanderName}”)? This cannot be undone.`)) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/decks/${deckId}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete");
+      router.push("/decks");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <div>
       <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">
@@ -62,7 +78,7 @@ export function DeckView({ commanderName, data, legalityEnforced }: DeckViewProp
           {stats.totalNonlands} nonlands, {stats.totalLands} lands
         </p>
       )}
-      <div className="mt-4 flex gap-2">
+      <div className="mt-4 flex flex-wrap items-center gap-2">
         <button
           type="button"
           onClick={copyAsText}
@@ -76,6 +92,14 @@ export function DeckView({ commanderName, data, legalityEnforced }: DeckViewProp
           className="rounded border border-zinc-300 bg-white px-3 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-900"
         >
           Download .txt
+        </button>
+        <button
+          type="button"
+          onClick={handleDelete}
+          disabled={deleting}
+          className="ml-auto rounded border border-red-200 bg-white px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 dark:border-red-900 dark:bg-zinc-900 dark:text-red-400 dark:hover:bg-red-950/50 disabled:opacity-50"
+        >
+          {deleting ? "Deleting…" : "Delete deck"}
         </button>
       </div>
       <div className="mt-6 grid gap-6 sm:grid-cols-2">

@@ -33,6 +33,7 @@ export default async function DeckDetailPage({
       <Header />
       <main className="mx-auto max-w-4xl px-4 py-8">
         <DeckView
+          deckId={deck.id}
           commanderName={deck.commanderName}
           data={data}
           legalityEnforced={deck.legalityEnforced}

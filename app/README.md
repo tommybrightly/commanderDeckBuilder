@@ -57,6 +57,10 @@ You can deploy this app to any host that runs Node and supports SQLite or Postgr
 - **Railway / Render / Fly.io:** Good fit. Persistent disk for SQLite, longer request timeouts. Run **Sync card database** from Settings after deploy. Optionally re-run periodically (e.g. monthly) or add a cron that calls `POST /api/cards/sync`.
 - **Database:** For production you may switch `DATABASE_URL` to Postgres (e.g. Railway Postgres, Neon) and run `prisma migrate deploy`. The card sync and all features work the same.
 
+## Testing
+
+Run deck builder tests: `npm run test`. See **[docs/TESTING_AND_RULES.md](docs/TESTING_AND_RULES.md)** for what’s covered (deck size, color identity, legality, no duplicates) and how to verify that builds follow Commander rules. The doc also explains how “most powerful” is defined (role + curve heuristics, not win-rate optimization).
+
 ## Tech
 
 - Next.js 16 (App Router), TypeScript, Tailwind

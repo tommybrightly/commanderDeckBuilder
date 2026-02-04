@@ -6,6 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "lint": "eslint",
     "seed-cards": "tsx scripts/import-scryfall-cards.ts",
     "seed-from-file": "tsx scripts/seed-from-bulk-list.ts"
@@ -30,6 +32,8 @@
     "prisma": "^7.3.0",
     "tailwindcss": "^4",
     "tsx": "^4.7.0",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vite-tsconfig-paths": "^6.0.5",
+    "vitest": "^4.0.18"
   }
 }
