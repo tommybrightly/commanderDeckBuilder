@@ -58,6 +58,23 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
+model Card {
+  id             String   @id @default(cuid())
+  oracleId       String   @unique // Scryfall oracle card ID
+  name           String
+  manaCost       String?
+  cmc            Int      @default(0)
+  colors         String   // JSON array e.g. ["W","U"]
+  colorIdentity  String   // JSON array
+  typeLine       String
+  oracleText     String?
+  legalities     String?  // JSON object
+  imageUrl       String?
+  updatedAt      DateTime @updatedAt
+
+  collectionItems CollectionItem[]
+}
+
 model Collection {
   id        String   @id @default(cuid())
   userId    String
@@ -66,8 +83,21 @@ model Collection {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  decks Deck[]
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  decks            Deck[]
+  collectionItems  CollectionItem[]
+}
+
+model CollectionItem {
+  id           String @id @default(cuid())
+  collectionId String
+  cardId       String
+  quantity     Int    @default(1)
+
+  collection Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  card       Card       @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  @@unique([collectionId, cardId])
 }
 
 model Deck {

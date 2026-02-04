@@ -8,6 +8,11 @@ import type { DeckList } from "@/lib/mtg/types";
 
 type CollectionRow = { id: string; name: string };
 
+type StreamEvent =
+  | { type: "progress"; stage: string; progress: number; message?: string }
+  | { type: "result"; deckId: string; deck: DeckList }
+  | { type: "error"; error: string };
+
 export function BuildClient() {
   const searchParams = useSearchParams();
   const presetCollectionId = searchParams.get("collectionId");
@@ -19,6 +24,8 @@ export function BuildClient() {
   const [building, setBuilding] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{ deckId: string; deck: DeckList } | null>(null);
+  const [progress, setProgress] = useState(0);
+  const [progressMessage, setProgressMessage] = useState("");
 
   useEffect(() => {
     fetch("/api/collections")
@@ -44,6 +51,9 @@ export function BuildClient() {
     setError(null);
     setBuilding(true);
     setResult(null);
+    setProgress(0);
+    setProgressMessage("Starting…");
+
     try {
       const res = await fetch("/api/build-deck", {
         method: "POST",
@@ -54,9 +64,42 @@ export function BuildClient() {
           enforceLegality,
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Build failed");
-      setResult(data);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error((data as { error?: string }).error ?? "Build failed");
+      }
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+      if (!reader) throw new Error("No response body");
+
+      let buffer = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+          let event: StreamEvent;
+          try {
+            event = JSON.parse(trimmed) as StreamEvent;
+          } catch {
+            continue;
+          }
+          if (event.type === "progress") {
+            setProgress(event.progress);
+            setProgressMessage(event.message ?? event.stage);
+          } else if (event.type === "result") {
+            setResult({ deckId: event.deckId, deck: event.deck });
+            setProgress(1);
+            setProgressMessage("Done");
+          } else if (event.type === "error") {
+            setError(event.error);
+          }
+        }
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Build failed");
     } finally {
@@ -164,6 +207,20 @@ export function BuildClient() {
       </div>
       {error && (
         <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+      )}
+      {building && (
+        <div className="space-y-2">
+          <div className="flex justify-between text-sm text-zinc-600 dark:text-zinc-400">
+            <span>{progressMessage}</span>
+            <span>{Math.round(progress * 100)}%</span>
+          </div>
+          <div className="h-3 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
+            <div
+              className="h-full rounded-full bg-zinc-900 transition-[width] duration-300 ease-out dark:bg-zinc-100"
+              style={{ width: `${Math.min(100, progress * 100)}%` }}
+            />
+          </div>
+        </div>
       )}
       <button
         type="button"

@@ -7,7 +7,7 @@ import type {
   DeckList,
   OwnedCard,
 } from "./types";
-import { fetchCardByName, getCardInfoList } from "./cardDataService";
+import { fetchCardByName, getCardInfoListBatched } from "./cardDataService";
 
 const COMMANDER_BANLIST = new Set(
   [
@@ -66,21 +66,39 @@ function cardToDeckEntry(card: CardInfo, role?: CardRole): CardInDeck {
   };
 }
 
+export type BuildProgress = (stage: string, progress: number, message?: string) => void;
+
 export async function buildDeck(params: {
   owned: OwnedCard[];
   commander: CommanderChoice;
   options: BuilderOptions;
+  onProgress?: BuildProgress;
+  /** When provided, skips fetching card data (use for enriched collections). */
+  cardInfos?: Map<string, CardInfo>;
 }): Promise<DeckList> {
-  const { owned, commander, options } = params;
+  const { owned, commander, options, onProgress, cardInfos: preloadedCardInfos } = params;
   const identity = commander.colorIdentity ?? [];
   const enforceLegality = options.enforceLegality ?? true;
 
-  const uniqueNames = [...new Set(owned.map((c) => c.name))];
-  const cardInfos = await getCardInfoList(uniqueNames);
-  const commanderInfo = await fetchCardByName(commander.name);
+  let cardInfos: Map<string, CardInfo>;
+  if (preloadedCardInfos && preloadedCardInfos.size > 0) {
+    onProgress?.("fetching", 1, "Using saved card data");
+    cardInfos = preloadedCardInfos;
+  } else {
+    const uniqueNames = [...new Set(owned.map((c) => c.name))];
+    onProgress?.("fetching", 0, `Fetching ${uniqueNames.length} cards…`);
+    cardInfos = await getCardInfoListBatched(uniqueNames, (fetched, total) => {
+      onProgress?.("fetching", total > 0 ? fetched / total : 0, `Fetched ${fetched}/${total} cards`);
+    });
+    onProgress?.("fetching", 1, "Cards loaded");
+  }
+
+  const commanderInfo = preloadedCardInfos?.get(commander.name.toLowerCase())
+    ?? await fetchCardByName(commander.name);
   if (!commanderInfo) {
     throw new Error(`Commander not found: ${commander.name}`);
   }
+  onProgress?.("building", 0.5, "Building deck…");
 
   const candidateEntries: Array<{ card: CardInfo; owned: OwnedCard; role: CardRole }> = [];
   for (const o of owned) {
@@ -158,6 +176,8 @@ export async function buildDeck(params: {
     const r = c.role ?? "other";
     byRoleCount[r] = (byRoleCount[r] ?? 0) + 1;
   }
+
+  onProgress?.("building", 1, "Done");
 
   return {
     commander: {
