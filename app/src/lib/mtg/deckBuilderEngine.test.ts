@@ -171,4 +171,50 @@ describe("buildDeck", () => {
     expect(uniqueMain.size).toBe(mainNames.length);
     expect(result.main.length + result.lands.length).toBe(99);
   });
+
+  it("prefers creatures that match the commander theme (e.g. Angels/Demons/Dragons for Kaalia)", async () => {
+    const commander: CommanderChoice = {
+      id: "kaalia",
+      name: "Kaalia of the Vast",
+      colorIdentity: ["W", "B", "R"],
+    };
+    const commanderCard = card("Kaalia of the Vast", {
+      colorIdentity: ["W", "B", "R"],
+      typeLine: "Legendary Creature — Human Cleric",
+      oracleText: "Flying. Whenever Kaalia attacks, you may put an Angel, Demon, or Dragon from your hand onto the battlefield.",
+    });
+    const cards: CardInfo[] = [
+      commanderCard,
+      card("Random Human", { colorIdentity: ["W"], typeLine: "Creature — Human" }),
+      card("Another Human", { colorIdentity: ["W", "B"], typeLine: "Creature — Human Soldier" }),
+      card("Big Angel", { colorIdentity: ["W"], typeLine: "Creature — Angel" }),
+      card("Big Dragon", { colorIdentity: ["R"], typeLine: "Creature — Dragon" }),
+      card("Sol Ring", { colorIdentity: [], typeLine: "Artifact", oracleText: "Add one mana." }),
+      ...Array.from({ length: 100 }, (_, i) =>
+        card(`Filler ${i}`, { colorIdentity: ["W", "B", "R"], typeLine: "Creature — Human" })
+      ),
+    ];
+    const cardInfos = new Map(cards.map((c) => [c.name.toLowerCase(), c]));
+    const owned: OwnedCard[] = cards.map((c) => ({ name: c.name, quantity: 1 }));
+
+    const result = await buildDeck({
+      owned,
+      commander,
+      options: { enforceLegality: true },
+      cardInfos,
+    });
+
+    const mainNames = result.main.map((c) => c.name);
+    expect(mainNames).toContain("Big Angel");
+    expect(mainNames).toContain("Big Dragon");
+    const angelIdx = mainNames.indexOf("Big Angel");
+    const dragonIdx = mainNames.indexOf("Big Dragon");
+    const humanIdx = mainNames.indexOf("Random Human");
+    expect(angelIdx).toBeGreaterThan(-1);
+    expect(dragonIdx).toBeGreaterThan(-1);
+    if (humanIdx >= 0) {
+      expect(angelIdx).toBeLessThan(humanIdx);
+      expect(dragonIdx).toBeLessThan(humanIdx);
+    }
+  });
 });

@@ -33,6 +33,39 @@ const REMOVAL_KEYWORDS = ["destroy target", "exile target", "deal damage to targ
 const SWEEPER_KEYWORDS = ["destroy all", "exile all", "each creature", "each nonland"];
 const FINISHER_KEYWORDS = ["trample", "flying", "haste", "double strike", "whenever ~ attacks"];
 
+/** Creature subtypes that commanders often care about (theme/tribe). Used to match commander text. */
+const CREATURE_SUBTYPES = new Set([
+  "angel", "demon", "dragon", "vampire", "elf", "goblin", "wizard", "zombie", "soldier", "warrior",
+  "rogue", "cleric", "knight", "sliver", "spirit", "human", "cat", "dinosaur", "beast", "elemental",
+  "hydra", "bird", "devil", "horror", "nightmare", "phyrexian", "eldrazi", "myr", "construct",
+  "artificer", "pirate", "ninja", "samurai", "scout", "shaman", "druid", "merfolk", "kraken",
+  "serpent", "leviathan", "sphinx", "naga", "ally", "ooze", "plant", "fungus", "insect", "spider",
+  "djinn", "efreet", "vedalken", "pilot", "rat", "wolf", "bear", "turtle", "crab",
+]);
+
+/**
+ * Extract creature types (tribes) the commander's ability cares about from oracle text only.
+ * E.g. Kaalia "put an Angel, Demon, or Dragon" -> ["angel", "demon", "dragon"].
+ * We use oracle text only so the commander's own type line (e.g. Human, Cleric) doesn't become the theme.
+ */
+function getPreferredTribes(commander: CardInfo): string[] {
+  const raw = (commander.oracleText ?? "").toLowerCase();
+  if (!raw.trim()) return [];
+  const found: string[] = [];
+  for (const subtype of CREATURE_SUBTYPES) {
+    const re = new RegExp(`\\b${subtype}s?\\b`, "i");
+    if (re.test(raw)) found.push(subtype);
+  }
+  return [...new Set(found)];
+}
+
+/** True if card's type line contains any of the given tribes (e.g. "Creature — Angel" matches "angel"). */
+function cardMatchesTribes(card: CardInfo, tribes: string[]): boolean {
+  if (tribes.length === 0) return false;
+  const typeLine = (card.typeLine ?? "").toLowerCase();
+  return tribes.some((t) => typeLine.includes(t));
+}
+
 function assignRole(card: CardInfo): CardRole {
   const text = (card.oracleText ?? "").toLowerCase();
   const typeLine = (card.typeLine ?? "").toLowerCase();
@@ -137,6 +170,7 @@ export async function buildDeck(params: {
   const targetDraw = 8;
   const targetRemoval = 8;
   const targetSweeper = 3;
+  const preferredTribes = getPreferredTribes(commanderInfo);
 
   const byRole = (r: CardRole) =>
     candidateEntries.filter((e) => e.role === r && !used.has(e.card.name.toLowerCase()));
@@ -157,6 +191,18 @@ export async function buildDeck(params: {
   addBest(byRole("draw"), targetDraw);
   addBest(byRole("removal"), targetRemoval);
   addBest(byRole("sweeper"), targetSweeper);
+
+  if (preferredTribes.length > 0) {
+    const themePool = candidateEntries.filter(
+      (e) =>
+        e.role !== "land" &&
+        !used.has(e.card.name.toLowerCase()) &&
+        (e.role === "synergy" || e.role === "finisher") &&
+        cardMatchesTribes(e.card, preferredTribes)
+    );
+    addBest(themePool, 30);
+  }
+
   addBest(byRole("synergy"), 30);
   addBest(byRole("finisher"), 15);
   addBest(byRole("utility"), 99 - main.length);
