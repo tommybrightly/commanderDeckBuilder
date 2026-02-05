@@ -90,11 +90,35 @@ function assignRole(card: CardInfo): CardRole {
 /** Commander rule: card is legal if every color in its identity is in the commander's identity. */
 function colorIdentityMatches(commanderIdentity: string[], card: CardInfo): boolean {
   const allowed = new Set(commanderIdentity);
-  for (const c of card.colorIdentity ?? []) {
+  const identity = getEffectiveColorIdentity(card);
+  for (const c of identity) {
     if (!allowed.has(c)) return false;
   }
   return true;
 }
+
+/** For lands with empty stored identity, infer from oracle text (e.g. "Plains" or "{W}" → W). */
+function getEffectiveColorIdentity(card: CardInfo): string[] {
+  const stored = card.colorIdentity ?? [];
+  if (stored.length > 0) return stored;
+  const typeLine = (card.typeLine ?? "").toLowerCase();
+  if (!typeLine.includes("land")) return stored;
+
+  const text = (card.oracleText ?? "").toLowerCase();
+  // "Mana of any color" / "any color" → all five (card only legal in 5c decks)
+  if (/mana of any color|add one mana of any color|any color of mana/.test(text))
+    return ["W", "U", "B", "R", "G"];
+
+  const inferred: string[] = [];
+  if (/\{w\}|plains|white mana|add w\b|adds? w\b/.test(text)) inferred.push("W");
+  if (/\{u\}|island|blue mana|add u\b|adds? u\b/.test(text)) inferred.push("U");
+  if (/\{b\}|swamp|black mana|add b\b|adds? b\b/.test(text)) inferred.push("B");
+  if (/\{r\}|mountain|red mana|add r\b|adds? r\b/.test(text)) inferred.push("R");
+  if (/\{g\}|forest|green mana|add g\b|adds? g\b/.test(text)) inferred.push("G");
+  return [...new Set(inferred)];
+}
+
+const BASIC_LAND_NAMES = new Set(["plains", "island", "swamp", "mountain", "forest"]);
 
 function cardToDeckEntry(card: CardInfo, role?: CardRole): CardInDeck {
   return {
@@ -254,7 +278,15 @@ export async function buildDeck(params: {
   addBest(byRole("finisher"), 15);
   addBest(byRole("utility"), MAX_NONLANDS - main.length);
 
-  const landCandidates = candidateEntries.filter((e) => e.role === "land" && !used.has(e.card.name.toLowerCase()));
+  // Lands must match commander color identity (use effective identity for lands with empty stored).
+  // Exclude basic land names so we add basics for free and don't use collection slots for them.
+  const landCandidates = candidateEntries.filter(
+    (e) =>
+      e.role === "land" &&
+      !used.has(e.card.name.toLowerCase()) &&
+      colorIdentityMatches(identity, e.card) &&
+      !BASIC_LAND_NAMES.has(e.card.name.toLowerCase().trim())
+  );
   const landByCmc = [...landCandidates].sort((a, b) => a.card.cmc - b.card.cmc);
   const landSlotsTarget = Math.min(99 - main.length, MAX_LANDS);
   for (const e of landByCmc) {

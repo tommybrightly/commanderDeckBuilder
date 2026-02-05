@@ -269,6 +269,23 @@ export function DeckListByType({ main, lands, showRole = true, compact }: DeckLi
   const maxHeight = compact ? "max-h-48" : "max-h-96";
   const nonEmptyTypes = DISPLAY_TYPE_ORDER.filter((type) => byType[type].length > 0);
 
+  // Group lands by name so we show "10x Swamp" instead of ten "1x Swamp" lines
+  const groupedLands = (() => {
+    const byName = new Map<string, { quantity: number; imageUrl?: string }>();
+    for (const c of lands) {
+      const key = c.name;
+      const existing = byName.get(key);
+      const qty = c.quantity ?? 1;
+      if (existing) {
+        existing.quantity += qty;
+      } else {
+        byName.set(key, { quantity: qty, imageUrl: c.imageUrl });
+      }
+    }
+    return Array.from(byName.entries(), ([name, { quantity, imageUrl }]) => ({ name, quantity, imageUrl }));
+  })();
+  const totalLandCards = groupedLands.reduce((s, c) => s + c.quantity, 0);
+
   const sectionLabel = (type: string) => (type === "Other" ? "Other" : `${type}s`);
 
   return (
@@ -314,15 +331,15 @@ export function DeckListByType({ main, lands, showRole = true, compact }: DeckLi
         <div className="min-w-0">
           <section className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900">
             <h3 className="text-lg font-semibold text-zinc-800 dark:text-zinc-200">
-              Lands ({lands.length})
+              Lands ({totalLandCards})
             </h3>
             <ul className={`mt-2 overflow-auto rounded bg-zinc-50/80 p-3 dark:bg-zinc-800/50 ${maxHeight}`}>
-              {lands.map((c, i) => (
-                <li key={`${c.name}-${i}`} className="flex items-center gap-3 py-1.5 text-sm">
+              {groupedLands.map((c) => (
+                <li key={c.name} className="flex items-center gap-3 py-1.5 text-sm">
                   {c.imageUrl ? (
                     <span
                       className="relative inline-block cursor-pointer"
-                      onMouseEnter={(e) => showPreview(c.name, c.imageUrl, e.clientX, e.clientY)}
+                      onMouseEnter={(e) => showPreview(c.name, c.imageUrl!, e.clientX, e.clientY)}
                       onMouseMove={(e) => updatePreviewPosition(e.clientX, e.clientY)}
                       onMouseLeave={() => hidePreview(200)}
                     >
@@ -337,7 +354,7 @@ export function DeckListByType({ main, lands, showRole = true, compact }: DeckLi
                   ) : (
                     <span className="h-16 w-[44px] shrink-0 rounded bg-zinc-300 dark:bg-zinc-600" aria-hidden />
                   )}
-                  <span>{c.quantity ?? 1}x {c.name}</span>
+                  <span>{c.quantity}x {c.name}</span>
                 </li>
               ))}
             </ul>
