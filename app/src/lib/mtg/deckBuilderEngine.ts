@@ -9,6 +9,12 @@ import type {
 } from "./types";
 import { getCardsByNamesFromDb, getCardByNameFromDb } from "./cardDb";
 
+/**
+ * Mana curve targets (commander-dependent in practice; these are defaults):
+ * - Bell-shaped curve peaking at 2–3 MV; majority of nonlands in 2–4 MV.
+ * - Target average MV below 3.0, often 2.5, for efficiency.
+ */
+
 const COMMANDER_BANLIST = new Set(
   [
     "Ancestral Recall", "Balance", "Biorhythm", "Black Lotus", "Braids, Cabal Minion",
@@ -168,8 +174,9 @@ export async function buildDeck(params: {
   const main: CardInDeck[] = [];
   const landSlots: CardInDeck[] = [];
 
-  // Guidelines: 34–38 lands, 10–15 ramp, 10–12 draw, 10–15 removal, 3–6 wipes, 25–30 synergy/theme
+  // Guidelines: 34–38 lands typical; never exceed 40 (except dedicated landfall). 10–15 ramp, etc.
   const TARGET_LANDS = 36;
+  const MAX_LANDS = 40; // hard cap unless we add a "landfall" option later
   const MAX_NONLANDS = 99 - TARGET_LANDS; // 63, leaving room for 36 lands
   const targetRamp = 12;       // 10–15
   const targetDraw = 11;       // 10–12
@@ -179,12 +186,45 @@ export async function buildDeck(params: {
 
   const preferredTribes = getPreferredTribes(commanderInfo);
 
+  /** Ideal curve: bell peaking at 2–3 MV; target avg ≤ 3.0 (aim 2.5); majority 2–4 drops. */
+  const TARGET_AVG_CMC = 2.5;
+  const MAX_AVG_CMC = 3.0;
+
+  /** How much we want a card at this CMC (1 = ideal band 2–4, peak 2–3). */
+  function curveWeight(cmc: number): number {
+    const c = typeof cmc === "number" ? cmc : 0;
+    if (c <= 1) return 0.6;   // 0–1: fine for ramp, less ideal for general slots
+    if (c === 2 || c === 3) return 1.0;  // peak
+    if (c === 4) return 0.95;
+    if (c === 5) return 0.65;
+    if (c === 6) return 0.4;
+    return 0.25;  // 7+
+  }
+
+  /** Score for adding this card given current main (higher = better curve fit). */
+  function curveScore(card: CardInfo, currentMain: CardInDeck[]): number {
+    const cmc = typeof card.cmc === "number" ? card.cmc : 0;
+    const totalCmc = currentMain.reduce((s, c) => s + (c.cmc ?? 0), 0);
+    const count = currentMain.length;
+    const newAvg = (totalCmc + cmc) / (count + 1);
+    const weight = curveWeight(cmc);
+    // Penalize if adding this card would push average above target
+    const avgPenalty = newAvg > MAX_AVG_CMC ? (newAvg - MAX_AVG_CMC) * 0.5 : 0;
+    const towardTarget = Math.abs(newAvg - TARGET_AVG_CMC) < Math.abs((totalCmc / (count || 1)) - TARGET_AVG_CMC) ? 0.1 : 0; // small bonus for moving toward 2.5
+    return weight - avgPenalty + towardTarget;
+  }
+
   const byRole = (r: CardRole) =>
     candidateEntries.filter((e) => e.role === r && !used.has(e.card.name.toLowerCase()));
 
   const addBest = (pool: typeof candidateEntries, limit: number) => {
-    const byCmc = [...pool].sort((a, b) => a.card.cmc - b.card.cmc);
-    for (const e of byCmc) {
+    const sorted = [...pool].sort((a, b) => {
+      const scoreA = curveScore(a.card, main);
+      const scoreB = curveScore(b.card, main);
+      if (scoreB !== scoreA) return scoreB - scoreA; // higher score first
+      return a.card.cmc - b.card.cmc; // tie-break: prefer lower CMC
+    });
+    for (const e of sorted) {
       if (main.length >= MAX_NONLANDS) break;
       const key = e.card.name.toLowerCase();
       if (used.has(key)) continue;
@@ -216,7 +256,7 @@ export async function buildDeck(params: {
 
   const landCandidates = candidateEntries.filter((e) => e.role === "land" && !used.has(e.card.name.toLowerCase()));
   const landByCmc = [...landCandidates].sort((a, b) => a.card.cmc - b.card.cmc);
-  const landSlotsTarget = 99 - main.length;
+  const landSlotsTarget = Math.min(99 - main.length, MAX_LANDS);
   for (const e of landByCmc) {
     if (landSlots.length >= landSlotsTarget) break;
     used.add(e.card.name.toLowerCase());
@@ -231,7 +271,8 @@ export async function buildDeck(params: {
     G: "Forest",
   };
   const basicsInIdentity = identity.map((c) => colorToBasic[c]).filter(Boolean);
-  const needBasics = 99 - main.length - landSlots.length;
+  const maxBasicsToAdd = Math.max(0, MAX_LANDS - landSlots.length);
+  const needBasics = Math.min(99 - main.length - landSlots.length, maxBasicsToAdd);
   for (let i = 0; i < needBasics && basicsInIdentity.length > 0; i++) {
     landSlots.push({
       name: basicsInIdentity[i % basicsInIdentity.length]!,
@@ -245,6 +286,9 @@ export async function buildDeck(params: {
     const r = c.role ?? "other";
     byRoleCount[r] = (byRoleCount[r] ?? 0) + 1;
   }
+
+  const totalCards = main.length + landSlots.length;
+  const shortBy = totalCards < 99 ? 99 - totalCards : undefined;
 
   onProgress?.("building", 1, "Done");
 
@@ -262,6 +306,7 @@ export async function buildDeck(params: {
       totalLands: landSlots.length,
       byRole: byRoleCount,
       colorIdentity: identity,
+      ...(shortBy != null && { shortBy }),
     },
     legalityEnforced: enforceLegality,
   };

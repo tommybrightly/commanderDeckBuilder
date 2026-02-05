@@ -58,6 +58,8 @@ export interface DeckList {
     totalLands: number;
     byRole: Partial<Record<CardRole, number>>;
     colorIdentity: string[];
+    /** Set when deck has fewer than 99 cards (e.g. land cap left deck short). */
+    shortBy?: number;
   };
   legalityEnforced: boolean;
 }

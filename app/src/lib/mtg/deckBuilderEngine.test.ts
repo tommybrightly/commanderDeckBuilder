@@ -48,7 +48,9 @@ describe("buildDeck", () => {
     });
 
     const total = result.main.length + result.lands.length;
-    expect(total).toBe(99);
+    const shortBy = result.stats.shortBy ?? 0;
+    expect(total + shortBy).toBe(99); // full deck or short deck (lands capped at 40)
+    expect(result.lands.length).toBeLessThanOrEqual(40);
     expect(result.commander.name).toBe(commander.name);
   });
 
@@ -169,7 +171,10 @@ describe("buildDeck", () => {
     const mainNames = result.main.map((c) => c.name);
     const uniqueMain = new Set(mainNames);
     expect(uniqueMain.size).toBe(mainNames.length);
-    expect(result.main.length + result.lands.length).toBe(99);
+    const total = result.main.length + result.lands.length;
+    const shortBy = result.stats.shortBy ?? 0;
+    expect(total + shortBy).toBe(99);
+    expect(result.lands.length).toBeLessThanOrEqual(40);
   });
 
   it("prefers creatures that match the commander theme (e.g. Angels/Demons/Dragons for Kaalia)", async () => {

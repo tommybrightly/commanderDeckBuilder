@@ -132,6 +132,11 @@ export function BuildClient() {
             Legality checks were off — this list may include banned cards.
           </p>
         )}
+        {result.deck.stats.shortBy != null && result.deck.stats.shortBy > 0 && (
+          <p className="mt-1 text-sm text-amber-600 dark:text-amber-400">
+            This deck is {result.deck.stats.shortBy} card{result.deck.stats.shortBy === 1 ? "" : "s"} short of 99 (lands are capped at 40). Add more nonland cards to your collection in this commander’s colors and rebuild to fill the deck.
+          </p>
+        )}
         <div className="mt-4 flex gap-4">
           <a
             href={`/decks/${result.deckId}`}

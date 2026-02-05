@@ -11,7 +11,7 @@ interface DeckViewProps {
     commander?: { name: string; imageUrl?: string };
     main?: Array<{ name: string; quantity: number; role?: string; typeLine?: string; cmc?: number; imageUrl?: string }>;
     lands?: Array<{ name: string; quantity: number; imageUrl?: string }>;
-    stats?: { totalNonlands: number; totalLands: number; byRole?: Record<string, number> };
+    stats?: { totalNonlands: number; totalLands: number; byRole?: Record<string, number>; shortBy?: number };
     legalityEnforced?: boolean;
   };
   legalityEnforced: boolean;
@@ -72,6 +72,11 @@ export function DeckView({ deckId, commanderName, data, legalityEnforced }: Deck
       {!legalityEnforced && (
         <p className="mt-1 text-sm text-amber-600 dark:text-amber-400">
           Legality checks were off for this build.
+        </p>
+      )}
+      {stats?.shortBy != null && stats.shortBy > 0 && (
+        <p className="mt-1 text-sm text-amber-600 dark:text-amber-400">
+          This deck is {stats.shortBy} card{stats.shortBy === 1 ? "" : "s"} short of 99 (lands were capped at 40). Add more nonland cards and rebuild to fill the deck.
         </p>
       )}
       <div className="mt-4 rounded-lg border border-zinc-200 bg-zinc-50/50 p-4 dark:border-zinc-700 dark:bg-zinc-900/50">
