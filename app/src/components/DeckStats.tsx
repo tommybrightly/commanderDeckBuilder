@@ -267,7 +267,10 @@ export function DeckListByType({ main, lands, showRole = true, compact }: DeckLi
 
   const byType = groupMainByType(main);
   const maxHeight = compact ? "max-h-48" : "max-h-96";
-  const nonEmptyTypes = DISPLAY_TYPE_ORDER.filter((type) => byType[type].length > 0);
+  // Always show Enchantments and Sorceries (even when 0) so we can tell the user we couldn't find any
+  const typesToShow = DISPLAY_TYPE_ORDER.filter(
+    (type) => byType[type].length > 0 || type === "Enchantment" || type === "Sorcery"
+  );
 
   // Group lands by name so we show "10x Swamp" instead of ten "1x Swamp" lines
   const groupedLands = (() => {
@@ -288,78 +291,86 @@ export function DeckListByType({ main, lands, showRole = true, compact }: DeckLi
 
   const sectionLabel = (type: string) => (type === "Other" ? "Other" : `${type}s`);
 
+  const emptySlotMessage = "Couldn't find any good ones in your collection for this commander.";
+
   return (
     <>
-      <div className="grid gap-6 sm:grid-cols-2">
-        <div className="min-w-0 space-y-4">
-          {nonEmptyTypes.map((type) => (
+      <div className="grid min-w-0 grid-cols-2 gap-4">
+        {typesToShow.map((type) => {
+          const cards = byType[type];
+          const isEmpty = cards.length === 0;
+          return (
             <section key={type} className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900">
               <h3 className="text-lg font-semibold text-zinc-800 dark:text-zinc-200">
-                {sectionLabel(type)} ({byType[type].length})
+                {sectionLabel(type)} ({cards.length})
               </h3>
-              <ul className={`mt-2 overflow-auto rounded bg-zinc-50/80 p-3 dark:bg-zinc-800/50 ${maxHeight}`}>
-                {byType[type].map((c, i) => (
-                  <li key={`${c.name}-${i}`} className="flex items-center gap-3 py-1.5 text-sm">
-                    {c.imageUrl ? (
-                      <span
-                        className="relative inline-block cursor-pointer"
-                        onMouseEnter={(e) => showPreview(c.name, c.imageUrl, e.clientX, e.clientY)}
-                        onMouseMove={(e) => updatePreviewPosition(e.clientX, e.clientY)}
-                        onMouseLeave={() => hidePreview(200)}
-                      >
-                        <img
-                          src={c.imageUrl}
-                          alt=""
-                          className="h-16 w-[44px] shrink-0 rounded object-cover shadow-md border border-zinc-200 dark:border-zinc-600"
-                          loading="lazy"
-                          title={c.name}
-                        />
+              {isEmpty ? (
+                <p className="mt-2 rounded bg-zinc-50/80 px-3 py-4 text-sm italic text-zinc-500 dark:bg-zinc-800/50 dark:text-zinc-400">
+                  {emptySlotMessage}
+                </p>
+              ) : (
+                <ul className={`mt-2 overflow-auto rounded bg-zinc-50/80 p-3 dark:bg-zinc-800/50 ${maxHeight}`}>
+                  {cards.map((c, i) => (
+                    <li key={`${c.name}-${i}`} className="flex items-center gap-3 py-1.5 text-sm">
+                      {c.imageUrl ? (
+                        <span
+                          className="relative inline-block cursor-pointer"
+                          onMouseEnter={(e) => showPreview(c.name, c.imageUrl, e.clientX, e.clientY)}
+                          onMouseMove={(e) => updatePreviewPosition(e.clientX, e.clientY)}
+                          onMouseLeave={() => hidePreview(200)}
+                        >
+                          <img
+                            src={c.imageUrl}
+                            alt=""
+                            className="h-16 w-[44px] shrink-0 rounded object-cover shadow-md border border-zinc-200 dark:border-zinc-600"
+                            loading="lazy"
+                            title={c.name}
+                          />
+                        </span>
+                      ) : (
+                        <span className="h-16 w-[44px] shrink-0 rounded bg-zinc-300 dark:bg-zinc-600" aria-hidden />
+                      )}
+                      <span>
+                        {c.quantity}x {c.name}
+                        {showRole && c.role && <span className="text-zinc-500"> — {c.role}</span>}
                       </span>
-                    ) : (
-                      <span className="h-16 w-[44px] shrink-0 rounded bg-zinc-300 dark:bg-zinc-600" aria-hidden />
-                    )}
-                    <span>
-                      {c.quantity}x {c.name}
-                      {showRole && c.role && <span className="text-zinc-500"> — {c.role}</span>}
-                    </span>
-                  </li>
-                ))}
-              </ul>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </section>
-          ))}
-        </div>
-        <div className="min-w-0">
-          <section className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900">
-            <h3 className="text-lg font-semibold text-zinc-800 dark:text-zinc-200">
-              Lands ({totalLandCards})
-            </h3>
-            <ul className={`mt-2 overflow-auto rounded bg-zinc-50/80 p-3 dark:bg-zinc-800/50 ${maxHeight}`}>
-              {groupedLands.map((c) => (
-                <li key={c.name} className="flex items-center gap-3 py-1.5 text-sm">
-                  {c.imageUrl ? (
-                    <span
-                      className="relative inline-block cursor-pointer"
-                      onMouseEnter={(e) => showPreview(c.name, c.imageUrl!, e.clientX, e.clientY)}
-                      onMouseMove={(e) => updatePreviewPosition(e.clientX, e.clientY)}
-                      onMouseLeave={() => hidePreview(200)}
-                    >
-                      <img
-                        src={c.imageUrl}
-                        alt=""
-                        className="h-16 w-[44px] shrink-0 rounded object-cover shadow-md border border-zinc-200 dark:border-zinc-600"
-                        loading="lazy"
-                        title={c.name}
-                      />
-                    </span>
-                  ) : (
-                    <span className="h-16 w-[44px] shrink-0 rounded bg-zinc-300 dark:bg-zinc-600" aria-hidden />
-                  )}
-                  <span>{c.quantity}x {c.name}</span>
-                </li>
-              ))}
-            </ul>
-          </section>
-        </div>
+          );
+        })}
+        <section className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900">
+          <h3 className="text-lg font-semibold text-zinc-800 dark:text-zinc-200">
+            Lands ({totalLandCards})
+          </h3>
+          <ul className={`mt-2 overflow-auto rounded bg-zinc-50/80 p-3 dark:bg-zinc-800/50 ${maxHeight}`}>
+            {groupedLands.map((c) => (
+              <li key={c.name} className="flex items-center gap-3 py-1.5 text-sm">
+                {c.imageUrl ? (
+                  <span
+                    className="relative inline-block cursor-pointer"
+                    onMouseEnter={(e) => showPreview(c.name, c.imageUrl!, e.clientX, e.clientY)}
+                    onMouseMove={(e) => updatePreviewPosition(e.clientX, e.clientY)}
+                    onMouseLeave={() => hidePreview(200)}
+                  >
+                    <img
+                      src={c.imageUrl}
+                      alt=""
+                      className="h-16 w-[44px] shrink-0 rounded object-cover shadow-md border border-zinc-200 dark:border-zinc-600"
+                      loading="lazy"
+                      title={c.name}
+                    />
+                  </span>
+                ) : (
+                  <span className="h-16 w-[44px] shrink-0 rounded bg-zinc-300 dark:bg-zinc-600" aria-hidden />
+                )}
+                <span>{c.quantity}x {c.name}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
       </div>
       {hovered && (
         <CardHoverPreview

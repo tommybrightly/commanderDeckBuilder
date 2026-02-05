@@ -72,6 +72,10 @@ function cardMatchesTribes(card: CardInfo, tribes: string[]): boolean {
   return tribes.some((t) => typeLine.includes(t));
 }
 
+function typeLineIncludes(typeLine: string | undefined, type: string): boolean {
+  return (typeLine ?? "").toLowerCase().includes(type.toLowerCase());
+}
+
 function assignRole(card: CardInfo): CardRole {
   const text = (card.oracleText ?? "").toLowerCase();
   const typeLine = (card.typeLine ?? "").toLowerCase();
@@ -198,15 +202,16 @@ export async function buildDeck(params: {
   const main: CardInDeck[] = [];
   const landSlots: CardInDeck[] = [];
 
-  // Guidelines: 34–38 lands typical; never exceed 40 (except dedicated landfall). 10–15 ramp, etc.
+  // Guidelines: 34–38 lands typical; never exceed 40 (except dedicated landfall). Reserve room for utility (enchantments, sorceries).
   const TARGET_LANDS = 36;
   const MAX_LANDS = 40; // hard cap unless we add a "landfall" option later
-  const MAX_NONLANDS = 99 - TARGET_LANDS; // 63, leaving room for 36 lands
-  const targetRamp = 12;       // 10–15
-  const targetDraw = 11;       // 10–12
-  const targetRemoval = 12;    // 10–15 single-target
-  const targetSweeper = 4;     // 3–6 board wipes
-  const targetThemeSynergy = 28; // 25–30 cards that support commander strategy
+  const MAX_NONLANDS = 99 - TARGET_LANDS; // 63
+  const targetRamp = 10;
+  const targetDraw = 10;
+  const targetRemoval = 10;
+  const targetSweeper = 4;
+  const targetThemeSynergy = 18; // creatures/planeswalkers; leaves room for utility (enchantments, sorceries)
+  const targetFinisher = 5;
 
   const preferredTribes = getPreferredTribes(commanderInfo);
 
@@ -275,7 +280,17 @@ export async function buildDeck(params: {
   }
 
   addBest(byRole("synergy"), targetThemeSynergy);
-  addBest(byRole("finisher"), 15);
+  addBest(byRole("finisher"), targetFinisher);
+
+  // Reserve slots for enchantments and sorceries so the deck isn't only creatures/artifacts/instants
+  const utilityEnchantments = candidateEntries.filter(
+    (e) => e.role === "utility" && !used.has(e.card.name.toLowerCase()) && typeLineIncludes(e.card.typeLine, "enchantment")
+  );
+  const utilitySorceries = candidateEntries.filter(
+    (e) => e.role === "utility" && !used.has(e.card.name.toLowerCase()) && typeLineIncludes(e.card.typeLine, "sorcery")
+  );
+  addBest(utilityEnchantments, 5);
+  addBest(utilitySorceries, 5);
   addBest(byRole("utility"), MAX_NONLANDS - main.length);
 
   // Lands must match commander color identity (use effective identity for lands with empty stored).
