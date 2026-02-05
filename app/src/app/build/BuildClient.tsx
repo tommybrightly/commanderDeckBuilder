@@ -18,7 +18,10 @@ export function BuildClient() {
   const presetCollectionId = searchParams.get("collectionId");
 
   const [collections, setCollections] = useState<CollectionRow[]>([]);
+  const [source, setSource] = useState<"saved" | "bulk">(presetCollectionId ? "saved" : "saved");
   const [collectionId, setCollectionId] = useState(presetCollectionId ?? "");
+  const [rawInput, setRawInput] = useState("");
+  const [inputFormat, setInputFormat] = useState<"text" | "csv">("text");
   const [commander, setCommander] = useState<CommanderChoice | null>(null);
   const [enforceLegality, setEnforceLegality] = useState(true);
   const [building, setBuilding] = useState(false);
@@ -44,8 +47,12 @@ export function BuildClient() {
       setError("Choose a commander.");
       return;
     }
-    if (!collectionId) {
-      setError("Choose a collection.");
+    if (source === "saved" && !collectionId) {
+      setError("Choose a collection or paste/upload your bulk above.");
+      return;
+    }
+    if (source === "bulk" && !rawInput.trim()) {
+      setError("Paste your list or upload a file.");
       return;
     }
     setError(null);
@@ -55,14 +62,20 @@ export function BuildClient() {
     setProgressMessage("Starting…");
 
     try {
+      const body: Record<string, unknown> = {
+        commander,
+        enforceLegality,
+      };
+      if (source === "saved" && collectionId) {
+        body.collectionId = collectionId;
+      } else {
+        body.rawInput = rawInput.trim();
+        body.inputFormat = inputFormat;
+      }
       const res = await fetch("/api/build-deck", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          collectionId,
-          commander,
-          enforceLegality,
-        }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -105,7 +118,7 @@ export function BuildClient() {
     } finally {
       setBuilding(false);
     }
-  }, [collectionId, commander, enforceLegality]);
+  }, [source, collectionId, rawInput, inputFormat, commander, enforceLegality]);
 
   if (result) {
     return (
@@ -166,24 +179,88 @@ export function BuildClient() {
     );
   }
 
+  const handleBulkFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setRawInput(String(reader.result ?? ""));
+      setInputFormat("csv");
+    };
+    reader.readAsText(file);
+  };
+
   return (
     <div className="mt-6 max-w-xl space-y-6">
       <div>
         <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-          Collection
+          Your bulk / collection
         </label>
-        <select
-          value={collectionId}
-          onChange={(e) => setCollectionId(e.target.value)}
-          className="mt-1 w-full rounded border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-900"
-        >
-          <option value="">Select a collection</option>
-          {collections.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
+        <div className="mt-2 flex gap-2">
+          <button
+            type="button"
+            onClick={() => setSource("saved")}
+            className={`rounded px-3 py-1.5 text-sm ${source === "saved" ? "bg-zinc-200 dark:bg-zinc-700" : "bg-zinc-100 dark:bg-zinc-800"}`}
+          >
+            Saved collection
+          </button>
+          <button
+            type="button"
+            onClick={() => setSource("bulk")}
+            className={`rounded px-3 py-1.5 text-sm ${source === "bulk" ? "bg-zinc-200 dark:bg-zinc-700" : "bg-zinc-100 dark:bg-zinc-800"}`}
+          >
+            Paste or upload
+          </button>
+        </div>
+        {source === "saved" ? (
+          <select
+            value={collectionId}
+            onChange={(e) => setCollectionId(e.target.value)}
+            className="mt-2 w-full rounded border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-900"
+          >
+            <option value="">Select a collection</option>
+            {collections.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <div className="mt-2 space-y-2">
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setInputFormat("text")}
+                className={`rounded px-3 py-1.5 text-sm ${inputFormat === "text" ? "bg-zinc-200 dark:bg-zinc-700" : "bg-zinc-100 dark:bg-zinc-800"}`}
+              >
+                Text
+              </button>
+              <button
+                type="button"
+                onClick={() => setInputFormat("csv")}
+                className={`rounded px-3 py-1.5 text-sm ${inputFormat === "csv" ? "bg-zinc-200 dark:bg-zinc-700" : "bg-zinc-100 dark:bg-zinc-800"}`}
+              >
+                CSV
+              </button>
+              <label className="cursor-pointer rounded border border-zinc-300 bg-white px-3 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-900">
+                Upload file
+                <input
+                  type="file"
+                  accept=".csv,.txt"
+                  onChange={handleBulkFile}
+                  className="sr-only"
+                />
+              </label>
+            </div>
+            <textarea
+              value={rawInput}
+              onChange={(e) => setRawInput(e.target.value)}
+              placeholder={inputFormat === "csv" ? "Paste CSV or use Upload file" : "3 Lightning Bolt\n1 Sol Ring (C14)\nBack for More (OTP) 36"}
+              rows={6}
+              className="w-full rounded border border-zinc-300 bg-white px-3 py-2 font-mono text-sm dark:border-zinc-600 dark:bg-zinc-900"
+            />
+          </div>
+        )}
       </div>
       <div>
         <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
