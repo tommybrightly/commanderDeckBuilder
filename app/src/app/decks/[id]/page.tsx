@@ -26,7 +26,7 @@ export default async function DeckDetailPage({
     commander?: { name: string; imageUrl?: string };
     main?: Array<{ name: string; quantity: number; role?: string; typeLine?: string; cmc?: number; imageUrl?: string }>;
     lands?: Array<{ name: string; quantity: number; imageUrl?: string }>;
-    stats?: { totalNonlands: number; totalLands: number; byRole?: Record<string, number>; shortBy?: number };
+    stats?: { totalNonlands: number; totalLands: number; byRole?: Record<string, number>; shortBy?: number; colorIdentity?: string[]; strategyExplanation?: string };
     legalityEnforced?: boolean;
   };
   const main = raw?.main ?? [];

@@ -1,7 +1,8 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { buildDeck } from "@/lib/mtg/deckBuilderEngine";
+import { buildDeck, buildDeckFromCardNames } from "@/lib/mtg/deckBuilderEngine";
+import { getAIDeckList, getStrategyExplanation } from "@/lib/mtg/aiDeckBuilder";
 import { parseTextList, parseCsv } from "@/lib/mtg/parseCollection";
 import { enrichCollection } from "@/lib/mtg/enrichCollection";
 import { dbCardToCardInfo, getCardsByNamesFromDb, getCardByNameFromDb } from "@/lib/mtg/cardDb";
@@ -136,15 +137,78 @@ export async function POST(req: Request) {
           cardInfos = fromDb;
         }
 
-        const deckList = await buildDeck({
-          owned,
-          commander,
-          options: { enforceLegality: enforceLegality ?? true },
-          onProgress: (stage, progress, message) => {
-            send({ type: "progress", stage, progress, message });
-          },
-          cardInfos,
-        });
+        const enforceLegalityOption = enforceLegality ?? true;
+        const commanderInfo = cardInfos.get(commander.name.toLowerCase()) ?? await getCardByNameFromDb(commander.name);
+        if (!commanderInfo) {
+          send({
+            type: "error",
+            error: `Commander not found: ${commander.name}. Sync the card database from Settings.`,
+          });
+          controller.close();
+          return;
+        }
+
+        let deckList;
+        const useAI = Boolean(process.env.OPENAI_API_KEY?.trim());
+        if (useAI) {
+          send({ type: "progress", stage: "building", progress: 0.2, message: "Using AI to build the best deck…" });
+          const collectionNames = owned.map((c) => c.name);
+          const aiResult = await getAIDeckList({
+            commanderName: commander.name,
+            colorIdentity: commander.colorIdentity ?? [],
+            collectionCardNames: collectionNames,
+          });
+          if (aiResult && (aiResult.main.length >= 20 || aiResult.lands.length >= 10)) {
+            const fromAI = buildDeckFromCardNames({
+              mainNames: aiResult.main,
+              landNames: aiResult.lands,
+              owned,
+              commander,
+              cardInfos: cardInfos!,
+              enforceLegality: enforceLegalityOption,
+              commanderInfo,
+            });
+            if (fromAI) {
+              const total = fromAI.main.length + fromAI.lands.length;
+              if (total >= 99) {
+                deckList = fromAI;
+                send({ type: "progress", stage: "building", progress: 1, message: "AI deck ready" });
+              } else {
+                send({ type: "progress", stage: "building", progress: 0.7, message: "Filling to 99 cards…" });
+                deckList = await buildDeck({
+                  owned,
+                  commander,
+                  options: { enforceLegality: enforceLegalityOption },
+                  onProgress: (stage, progress, message) => {
+                    send({ type: "progress", stage, progress, message });
+                  },
+                  cardInfos,
+                  initialDeck: { main: fromAI.main, lands: fromAI.lands },
+                });
+              }
+            }
+          }
+        }
+
+        if (!deckList) {
+          deckList = await buildDeck({
+            owned,
+            commander,
+            options: { enforceLegality: enforceLegalityOption },
+            onProgress: (stage, progress, message) => {
+              send({ type: "progress", stage, progress, message });
+            },
+            cardInfos,
+          });
+        }
+        if (process.env.OPENAI_API_KEY?.trim()) {
+          send({ type: "progress", stage: "building", progress: 0.95, message: "Writing strategy…" });
+          const strategy = await getStrategyExplanation({
+            commanderName: commander.name,
+            mainCardNames: deckList.main.map((c) => c.name),
+          });
+          if (strategy) deckList.stats.strategyExplanation = strategy;
+        }
         const deck = await prisma.deck.create({
           data: {
             userId: session.user.id!,
@@ -154,7 +218,7 @@ export async function POST(req: Request) {
             data: JSON.parse(JSON.stringify(deckList)),
           },
         });
-        send({ type: "result", deckId: deck.id, deck: deckList });
+        send({ type: "result", deckId: deck.id, deck: deckList, collectionId: usedCollectionId ?? undefined });
       } catch (err) {
         const message = err instanceof Error ? err.message : "Build failed";
         send({ type: "error", error: message });

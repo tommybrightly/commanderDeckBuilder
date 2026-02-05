@@ -11,7 +11,7 @@ type CollectionRow = { id: string; name: string };
 
 type StreamEvent =
   | { type: "progress"; stage: string; progress: number; message?: string }
-  | { type: "result"; deckId: string; deck: DeckList }
+  | { type: "result"; deckId: string; deck: DeckList; collectionId?: string }
   | { type: "error"; error: string };
 
 export function BuildClient() {
@@ -27,7 +27,7 @@ export function BuildClient() {
   const [enforceLegality, setEnforceLegality] = useState(true);
   const [building, setBuilding] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<{ deckId: string; deck: DeckList } | null>(null);
+  const [result, setResult] = useState<{ deckId: string; deck: DeckList; collectionId?: string } | null>(null);
   const [progress, setProgress] = useState(0);
   const [progressMessage, setProgressMessage] = useState("");
 
@@ -106,7 +106,7 @@ export function BuildClient() {
             setProgress(event.progress);
             setProgressMessage(event.message ?? event.stage);
           } else if (event.type === "result") {
-            setResult({ deckId: event.deckId, deck: event.deck });
+            setResult({ deckId: event.deckId, deck: event.deck, collectionId: event.collectionId });
             setProgress(1);
             setProgressMessage("Done");
           } else if (event.type === "error") {
@@ -137,7 +137,7 @@ export function BuildClient() {
             This deck is {result.deck.stats.shortBy} card{result.deck.stats.shortBy === 1 ? "" : "s"} short of 99 (lands are capped at 40). Add more nonland cards to your collection in this commander’s colors and rebuild to fill the deck.
           </p>
         )}
-        <div className="mt-4 flex gap-4">
+        <div className="mt-4 flex flex-wrap items-center gap-2">
           <a
             href={`/decks/${result.deckId}`}
             className="rounded bg-zinc-900 px-4 py-2 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
@@ -160,6 +160,7 @@ export function BuildClient() {
               lands={result.deck.lands}
               totalNonlands={result.deck.stats.totalNonlands}
               totalLands={result.deck.stats.totalLands}
+              strategyExplanation={result.deck.stats.strategyExplanation}
               compact
             />
           </div>

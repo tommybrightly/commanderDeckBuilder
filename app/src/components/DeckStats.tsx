@@ -98,9 +98,11 @@ interface DeckStatsProps {
   totalNonlands?: number;
   totalLands?: number;
   compact?: boolean;
+  /** Short explanation of how the deck is meant to be played (AI-generated when available). */
+  strategyExplanation?: string | null;
 }
 
-export function DeckStats({ main, lands, totalNonlands, totalLands, compact }: DeckStatsProps) {
+export function DeckStats({ main, lands, totalNonlands, totalLands, compact, strategyExplanation }: DeckStatsProps) {
   const byType = countByType(main, lands);
   const curve = getCurve(main);
   const avgCmc = getAvgCmc(main);
@@ -149,6 +151,17 @@ export function DeckStats({ main, lands, totalNonlands, totalLands, compact }: D
               Average CMC: <span className="font-medium text-zinc-700 dark:text-zinc-300">{avgCmc}</span>
             </p>
           )}
+        </section>
+      )}
+
+      {strategyExplanation && (
+        <section>
+          <h3 className={compact ? "text-sm font-medium text-zinc-700 dark:text-zinc-300" : "text-base font-semibold text-zinc-800 dark:text-zinc-200"}>
+            How to play this deck
+          </h3>
+          <div className="mt-1 rounded border border-zinc-200 bg-zinc-50/80 px-3 py-2 dark:border-zinc-600 dark:bg-zinc-800/50">
+            <p className="text-sm text-zinc-700 dark:text-zinc-300">{strategyExplanation}</p>
+          </div>
         </section>
       )}
 

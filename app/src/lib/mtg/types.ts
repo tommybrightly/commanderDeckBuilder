@@ -60,6 +60,8 @@ export interface DeckList {
     colorIdentity: string[];
     /** Set when deck has fewer than 99 cards (e.g. land cap left deck short). */
     shortBy?: number;
+    /** Short explanation of how the deck is meant to be played (AI-generated when available). */
+    strategyExplanation?: string;
   };
   legalityEnforced: boolean;
 }
