@@ -6,7 +6,7 @@ import { getAIDeckList, getStrategyExplanation } from "@/lib/mtg/aiDeckBuilder";
 import { parseTextList, parseCsv } from "@/lib/mtg/parseCollection";
 import { enrichCollection } from "@/lib/mtg/enrichCollection";
 import { dbCardToCardInfo, getCardsByNamesFromDb, getCardByNameFromDb } from "@/lib/mtg/cardDb";
-import type { CommanderChoice } from "@/lib/mtg/types";
+import type { CommanderChoice, DeckArchetype } from "@/lib/mtg/types";
 import type { CardInfo } from "@/lib/mtg/types";
 
 export async function POST(req: Request) {
@@ -25,12 +25,14 @@ export async function POST(req: Request) {
     inputFormat,
     commander,
     enforceLegality,
+    archetype,
   } = body as {
     collectionId?: string;
     rawInput?: string;
     inputFormat?: "text" | "csv";
     commander: CommanderChoice;
     enforceLegality?: boolean;
+    archetype?: DeckArchetype;
   };
 
   if (!commander?.name) {
@@ -138,6 +140,7 @@ export async function POST(req: Request) {
         }
 
         const enforceLegalityOption = enforceLegality ?? true;
+        const archetypeOption = archetype ?? "balanced";
         const commanderInfo = cardInfos.get(commander.name.toLowerCase()) ?? await getCardByNameFromDb(commander.name);
         if (!commanderInfo) {
           send({
@@ -178,7 +181,7 @@ export async function POST(req: Request) {
                 deckList = await buildDeck({
                   owned,
                   commander,
-                  options: { enforceLegality: enforceLegalityOption },
+                  options: { enforceLegality: enforceLegalityOption, archetype: archetypeOption },
                   onProgress: (stage, progress, message) => {
                     send({ type: "progress", stage, progress, message });
                   },
@@ -194,7 +197,7 @@ export async function POST(req: Request) {
           deckList = await buildDeck({
             owned,
             commander,
-            options: { enforceLegality: enforceLegalityOption },
+            options: { enforceLegality: enforceLegalityOption, archetype: archetypeOption },
             onProgress: (stage, progress, message) => {
               send({ type: "progress", stage, progress, message });
             },

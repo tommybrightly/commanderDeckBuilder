@@ -186,6 +186,7 @@ export async function buildDeck(params: {
   const { owned, commander, options, onProgress, cardInfos: preloadedCardInfos, initialDeck } = params;
   const identity = commander.colorIdentity ?? [];
   const enforceLegality = options.enforceLegality ?? true;
+  const archetype = options.archetype ?? "balanced";
 
   let cardInfos: Map<string, CardInfo>;
   if (preloadedCardInfos && preloadedCardInfos.size > 0) {
@@ -253,15 +254,28 @@ export async function buildDeck(params: {
   // Typical 99-card breakdown: 34–38 lands, 10–15 ramp, 10–12 draw, 10–15 removal, 3–6 wipes, 25–30 synergy
   const TARGET_LANDS = 36;
   const MAX_NONLANDS = 99 - TARGET_LANDS; // 63
-  const targetRamp = 12;
-  const targetDraw = 11;
-  const targetRemoval = 12;
-  const targetSweeper = 4;
+  let targetRamp = 12;
+  let targetDraw = 11;
+  let targetRemoval = 12;
+  let targetSweeper = 4;
   const targetThemeSynergy = 25;
-  const targetFinisher = 4;
+  let targetFinisher = 4;
 
   const preferredTribes = getPreferredTribes(commanderInfo);
   const commanderCheats = commanderCheatsCreatures(commanderInfo);
+
+  // Archetype-specific role targets and type caps
+  if (archetype === "control") {
+    targetRemoval = 15;
+    targetDraw = 13;
+    targetSweeper = 6;
+  }
+  if (archetype === "spellslinger") {
+    targetDraw = 14;
+  }
+  if (archetype === "voltron") {
+    targetFinisher = 6;
+  }
 
   /** Ideal curve: bell peaking at 2–3 MV; target avg ≤ 3.0 (aim 2.5); majority 2–4 drops. */
   const TARGET_AVG_CMC = 2.5;
@@ -319,16 +333,55 @@ export async function buildDeck(params: {
     return base + themeBonus;
   }
 
+  /** Score for spellslinger: favor instants and sorceries. */
+  function spellslingerScore(card: CardInfo, currentMain: CardInDeck[]): number {
+    const base = curveScore(card, currentMain);
+    const line = (card.typeLine ?? "").toLowerCase();
+    const spellBonus = (line.includes("instant") || line.includes("sorcery")) ? 1.8 : 0;
+    return base + spellBonus;
+  }
+
+  /** Score for voltron: favor equipment and auras. */
+  function voltronScore(card: CardInfo, currentMain: CardInDeck[]): number {
+    const base = curveScore(card, currentMain);
+    const line = (card.typeLine ?? "").toLowerCase();
+    const voltronBonus = (line.includes("equipment") || line.includes("aura")) ? 2.0 : 0;
+    return base + voltronBonus;
+  }
+
+  type ScoreFn = (card: CardInfo, currentMain: CardInDeck[]) => number;
+
+  /** Which score to use for synergy/finisher/creature by archetype. */
+  const synergyScoreFn: ScoreFn =
+    archetype === "spellslinger" ? spellslingerScore
+    : archetype === "voltron" ? curveScore
+    : archetype === "control" ? curveScore
+    : (preferredTribes.length > 0 || archetype === "tribal") ? themeAwareScore
+    : curveScore;
+
   const byRole = (r: CardRole) =>
     candidateEntries.filter((e) => e.role === r && !used.has(e.card.name.toLowerCase()));
 
-  // Type balance: avoid instant/sorcery overload; creature count targets (20–35 typical, 25–30 sweet spot)
-  const MIN_CREATURES = 20;
-  const TARGET_CREATURES = preferredTribes.length > 0 ? 30 : 27; // tribal/theme decks lean creature-heavy
-  const MAX_INSTANTS = 14;
-  const MAX_SORCERIES = 10;
-
-  type ScoreFn = (card: CardInfo, currentMain: CardInDeck[]) => number;
+  // Type balance and creature targets by archetype
+  const { minCreatures: MIN_CREATURES, targetCreatures: TARGET_CREATURES, maxInstants: MAX_INSTANTS, maxSorceries: MAX_SORCERIES } = (() => {
+    switch (archetype) {
+      case "tribal":
+        return { minCreatures: 25, targetCreatures: 32, maxInstants: 12, maxSorceries: 8 };
+      case "spellslinger":
+        return { minCreatures: 0, targetCreatures: 10, maxInstants: 28, maxSorceries: 22 };
+      case "voltron":
+        return { minCreatures: 18, targetCreatures: 22, maxInstants: 12, maxSorceries: 10 };
+      case "control":
+        return { minCreatures: 16, targetCreatures: 20, maxInstants: 16, maxSorceries: 12 };
+      default:
+        return {
+          minCreatures: 20,
+          targetCreatures: preferredTribes.length > 0 ? 30 : 27,
+          maxInstants: 14,
+          maxSorceries: 10,
+        };
+    }
+  })();
 
   /**
    * Add up to `limit` cards from the pool. We treat the pool as "potentials" for this slot:
@@ -366,8 +419,19 @@ export async function buildDeck(params: {
   addBest(byRole("removal"), targetRemoval);
   addBest(byRole("sweeper"), targetSweeper);
 
-  // Theme/synergy/finisher: use theme-aware scoring so the deck revolves around the commander
-  if (preferredTribes.length > 0) {
+  // Voltron: prioritize equipment and auras early
+  if (archetype === "voltron") {
+    const equipmentAuraPool = candidateEntries.filter(
+      (e) =>
+        e.role !== "land" &&
+        !used.has(e.card.name.toLowerCase()) &&
+        (typeLineIncludes(e.card.typeLine, "Equipment") || typeLineIncludes(e.card.typeLine, "Aura"))
+    );
+    addBest(equipmentAuraPool, 14, { scoreFn: voltronScore });
+  }
+
+  // Theme/synergy/finisher: scoring depends on archetype (theme-aware for balanced/tribal, spellslinger/voltron/control use their own)
+  if (preferredTribes.length > 0 && archetype !== "spellslinger") {
     const themePool = candidateEntries.filter(
       (e) =>
         e.role !== "land" &&
@@ -375,11 +439,11 @@ export async function buildDeck(params: {
         (e.role === "synergy" || e.role === "finisher") &&
         cardMatchesTribes(e.card, preferredTribes)
     );
-    addBest(themePool, targetThemeSynergy, { scoreFn: themeAwareScore });
+    addBest(themePool, targetThemeSynergy, { scoreFn: synergyScoreFn });
   }
 
-  addBest(byRole("synergy"), targetThemeSynergy, { scoreFn: themeAwareScore });
-  addBest(byRole("finisher"), targetFinisher, { scoreFn: themeAwareScore });
+  addBest(byRole("synergy"), targetThemeSynergy, { scoreFn: synergyScoreFn });
+  addBest(byRole("finisher"), targetFinisher, { scoreFn: synergyScoreFn });
 
   // Reserve slots for enchantments and sorceries (still respect type caps)
   const utilityEnchantments = candidateEntries.filter(
@@ -390,11 +454,12 @@ export async function buildDeck(params: {
   );
   addBest(utilityEnchantments, 5);
   addBest(utilitySorceries, 5);
-  addBest(byRole("utility"), MAX_NONLANDS - main.length);
+  // Spellslinger: favor instants/sorceries in utility
+  addBest(byRole("utility"), MAX_NONLANDS - main.length, archetype === "spellslinger" ? { scoreFn: spellslingerScore } : undefined);
 
-  // Hit creature target (25–30 sweet spot; 30 for tribal). Prefer commander-theme creatures when applicable.
+  // Hit creature target (archetype-dependent). Prefer commander-theme when balanced/tribal.
   const creatureCount = countMainByType(main).creature ?? 0;
-  if (creatureCount < TARGET_CREATURES && main.length < MAX_NONLANDS) {
+  if (creatureCount < TARGET_CREATURES && main.length < MAX_NONLANDS && TARGET_CREATURES > 0) {
     const creaturePool = candidateEntries.filter(
       (e) =>
         e.role !== "land" &&
@@ -402,7 +467,7 @@ export async function buildDeck(params: {
         typeLineIncludes(e.card.typeLine, "creature")
     );
     const toAdd = Math.min(TARGET_CREATURES - creatureCount, MAX_NONLANDS - main.length);
-    addBest(creaturePool, main.length + toAdd, { onlyType: "creature", scoreFn: themeAwareScore });
+    addBest(creaturePool, main.length + toAdd, { onlyType: "creature", scoreFn: synergyScoreFn });
   }
 
   // Lands must match commander color identity (use effective identity for lands with empty stored).

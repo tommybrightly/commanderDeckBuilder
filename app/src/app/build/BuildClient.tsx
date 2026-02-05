@@ -4,8 +4,16 @@ import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { CommanderPicker } from "@/components/CommanderPicker";
 import { DeckStats, DeckListByType } from "@/components/DeckStats";
-import type { CommanderChoice } from "@/lib/mtg/types";
+import type { CommanderChoice, DeckArchetype } from "@/lib/mtg/types";
 import type { DeckList } from "@/lib/mtg/types";
+
+const ARCHETYPES: { value: DeckArchetype; label: string; hint: string }[] = [
+  { value: "balanced", label: "Balanced", hint: "25–30 creatures, general goodstuff" },
+  { value: "tribal", label: "Tribal", hint: "30+ creatures, strong theme" },
+  { value: "spellslinger", label: "Spellslinger", hint: "Few creatures, many instants/sorceries" },
+  { value: "voltron", label: "Voltron", hint: "18–22 creatures, lots of equipment/auras" },
+  { value: "control", label: "Control", hint: "16–22 creatures, more removal & draw" },
+];
 
 type CollectionRow = { id: string; name: string };
 
@@ -24,6 +32,7 @@ export function BuildClient() {
   const [rawInput, setRawInput] = useState("");
   const [inputFormat, setInputFormat] = useState<"text" | "csv">("text");
   const [commander, setCommander] = useState<CommanderChoice | null>(null);
+  const [archetype, setArchetype] = useState<DeckArchetype>("balanced");
   const [enforceLegality, setEnforceLegality] = useState(true);
   const [building, setBuilding] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -66,6 +75,7 @@ export function BuildClient() {
       const body: Record<string, unknown> = {
         commander,
         enforceLegality,
+        archetype,
       };
       if (source === "saved" && collectionId) {
         body.collectionId = collectionId;
@@ -119,7 +129,7 @@ export function BuildClient() {
     } finally {
       setBuilding(false);
     }
-  }, [source, collectionId, rawInput, inputFormat, commander, enforceLegality]);
+  }, [source, collectionId, rawInput, inputFormat, commander, archetype, enforceLegality]);
 
   if (result) {
     return (
@@ -261,6 +271,35 @@ export function BuildClient() {
         </label>
         <div className="mt-1">
           <CommanderPicker value={commander} onChange={setCommander} />
+        </div>
+      </div>
+      <div>
+        <span className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+          Deck style
+        </span>
+        <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+          Adjusts creature counts, spell caps, and what the builder prioritizes.
+        </p>
+        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2">
+          {ARCHETYPES.map(({ value, label, hint }) => (
+            <label
+              key={value}
+              className="flex cursor-pointer items-start gap-2 rounded border border-zinc-200 px-3 py-2 has-[:checked]:border-zinc-900 has-[:checked]:bg-zinc-100 dark:border-zinc-600 dark:has-[:checked]:border-zinc-100 dark:has-[:checked]:bg-zinc-800"
+            >
+              <input
+                type="radio"
+                name="archetype"
+                value={value}
+                checked={archetype === value}
+                onChange={() => setArchetype(value)}
+                className="mt-0.5 rounded border-zinc-300"
+              />
+              <span className="text-sm">
+                <span className="font-medium text-zinc-800 dark:text-zinc-200">{label}</span>
+                <span className="ml-1 text-zinc-500 dark:text-zinc-400">— {hint}</span>
+              </span>
+            </label>
+          ))}
         </div>
       </div>
       <div className="flex items-center gap-2">

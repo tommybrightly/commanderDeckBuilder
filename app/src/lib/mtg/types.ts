@@ -66,6 +66,16 @@ export interface DeckList {
   legalityEnforced: boolean;
 }
 
+/** Deck style / archetype; influences creature counts, type caps, and what we prioritize. */
+export type DeckArchetype =
+  | "balanced"   // 25–30 creatures, normal caps
+  | "tribal"     // 30–35 creatures, strong theme
+  | "spellslinger" // few creatures, many instants/sorceries
+  | "voltron"    // 18–22 creatures, favor equipment/auras
+  | "control";  // 16–22 creatures, more removal/draw
+
 export interface BuilderOptions {
   enforceLegality: boolean;
+  /** Deck style; if not set, defaults to "balanced" (or tribal behavior when commander has tribes). */
+  archetype?: DeckArchetype;
 }
