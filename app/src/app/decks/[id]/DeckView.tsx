@@ -2,14 +2,15 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { DeckStats, DeckListByType } from "@/components/DeckStats";
 
 interface DeckViewProps {
   deckId: string;
   commanderName: string;
   data: {
     commander?: { name: string; imageUrl?: string };
-    main?: Array<{ name: string; quantity: number; role?: string }>;
-    lands?: Array<{ name: string; quantity: number }>;
+    main?: Array<{ name: string; quantity: number; role?: string; typeLine?: string; cmc?: number; imageUrl?: string }>;
+    lands?: Array<{ name: string; quantity: number; imageUrl?: string }>;
     stats?: { totalNonlands: number; totalLands: number; byRole?: Record<string, number> };
     legalityEnforced?: boolean;
   };
@@ -73,11 +74,14 @@ export function DeckView({ deckId, commanderName, data, legalityEnforced }: Deck
           Legality checks were off for this build.
         </p>
       )}
-      {stats && (
-        <p className="mt-2 text-zinc-600 dark:text-zinc-400">
-          {stats.totalNonlands} nonlands, {stats.totalLands} lands
-        </p>
-      )}
+      <div className="mt-4 rounded-lg border border-zinc-200 bg-zinc-50/50 p-4 dark:border-zinc-700 dark:bg-zinc-900/50">
+        <DeckStats
+          main={main}
+          lands={lands}
+          totalNonlands={stats?.totalNonlands}
+          totalLands={stats?.totalLands}
+        />
+      </div>
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <button
           type="button"
@@ -102,33 +106,12 @@ export function DeckView({ deckId, commanderName, data, legalityEnforced }: Deck
           {deleting ? "Deleting…" : "Delete deck"}
         </button>
       </div>
-      <div className="mt-6 grid gap-6 sm:grid-cols-2">
-        <section>
-          <h2 className="text-lg font-semibold text-zinc-800 dark:text-zinc-200">
-            Spells ({main.length})
-          </h2>
-          <ul className="mt-2 max-h-96 overflow-auto rounded border border-zinc-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-900">
-            {main.map((c, i) => (
-              <li key={`${c.name}-${i}`} className="text-sm">
-                {c.quantity}x {c.name}
-                {c.role && <span className="text-zinc-500"> — {c.role}</span>}
-              </li>
-            ))}
-          </ul>
-        </section>
-        <section>
-          <h2 className="text-lg font-semibold text-zinc-800 dark:text-zinc-200">
-            Lands ({lands.length})
-          </h2>
-          <ul className="mt-2 max-h-96 overflow-auto rounded border border-zinc-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-900">
-            {lands.map((c, i) => (
-              <li key={`${c.name}-${i}`} className="text-sm">
-                {c.quantity}x {c.name}
-              </li>
-            ))}
-          </ul>
-        </section>
-      </div>
+      <section className="mt-6" aria-label="Deck list by type">
+        <h2 className="mb-4 text-xl font-semibold text-zinc-900 dark:text-zinc-100">
+          Deck list
+        </h2>
+        <DeckListByType main={main} lands={lands} showRole />
+      </section>
     </div>
   );
 }

@@ -48,7 +48,7 @@ These tests use mock card data and `cardInfos` so they don’t need the database
 
 The builder is **heuristic**, not an optimizer:
 
-- It fills slots by **role** (ramp, draw, removal, sweepers, synergy, finisher, utility) with **target counts** (e.g. 10 ramp, 8 draw).
+- It fills slots by **role** (ramp, draw, removal, sweepers, synergy, finisher, utility) with **target counts** in the ranges below (e.g. 12 ramp, 11 draw, 4 wipes).
 - Within each role it prefers **lower CMC** (curving out).
 - It does **not**:
   - Simulate games or win rate.

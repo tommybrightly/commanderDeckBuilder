@@ -96,6 +96,7 @@ function cardToDeckEntry(card: CardInfo, role?: CardRole): CardInDeck {
     quantity: 1,
     role: role ?? assignRole(card),
     cmc: card.cmc,
+    typeLine: card.typeLine,
     imageUrl: card.imageUrl,
   };
 }
@@ -166,10 +167,16 @@ export async function buildDeck(params: {
   const used = new Set<string>();
   const main: CardInDeck[] = [];
   const landSlots: CardInDeck[] = [];
-  const targetRamp = 10;
-  const targetDraw = 8;
-  const targetRemoval = 8;
-  const targetSweeper = 3;
+
+  // Guidelines: 34–38 lands, 10–15 ramp, 10–12 draw, 10–15 removal, 3–6 wipes, 25–30 synergy/theme
+  const TARGET_LANDS = 36;
+  const MAX_NONLANDS = 99 - TARGET_LANDS; // 63, leaving room for 36 lands
+  const targetRamp = 12;       // 10–15
+  const targetDraw = 11;       // 10–12
+  const targetRemoval = 12;    // 10–15 single-target
+  const targetSweeper = 4;     // 3–6 board wipes
+  const targetThemeSynergy = 28; // 25–30 cards that support commander strategy
+
   const preferredTribes = getPreferredTribes(commanderInfo);
 
   const byRole = (r: CardRole) =>
@@ -178,7 +185,7 @@ export async function buildDeck(params: {
   const addBest = (pool: typeof candidateEntries, limit: number) => {
     const byCmc = [...pool].sort((a, b) => a.card.cmc - b.card.cmc);
     for (const e of byCmc) {
-      if (main.length + landSlots.length >= 99) break;
+      if (main.length >= MAX_NONLANDS) break;
       const key = e.card.name.toLowerCase();
       if (used.has(key)) continue;
       used.add(key);
@@ -200,12 +207,12 @@ export async function buildDeck(params: {
         (e.role === "synergy" || e.role === "finisher") &&
         cardMatchesTribes(e.card, preferredTribes)
     );
-    addBest(themePool, 30);
+    addBest(themePool, targetThemeSynergy);
   }
 
-  addBest(byRole("synergy"), 30);
+  addBest(byRole("synergy"), targetThemeSynergy);
   addBest(byRole("finisher"), 15);
-  addBest(byRole("utility"), 99 - main.length);
+  addBest(byRole("utility"), MAX_NONLANDS - main.length);
 
   const landCandidates = candidateEntries.filter((e) => e.role === "land" && !used.has(e.card.name.toLowerCase()));
   const landByCmc = [...landCandidates].sort((a, b) => a.card.cmc - b.card.cmc);

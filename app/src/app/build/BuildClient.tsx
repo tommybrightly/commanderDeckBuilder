@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { CommanderPicker } from "@/components/CommanderPicker";
+import { DeckStats, DeckListByType } from "@/components/DeckStats";
 import type { CommanderChoice } from "@/lib/mtg/types";
 import type { DeckList } from "@/lib/mtg/types";
 
@@ -148,31 +149,17 @@ export function BuildClient() {
         </div>
         <div className="mt-6 rounded border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900">
           <p className="font-medium">Commander: {result.deck.commander.name}</p>
-          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-            Nonlands: {result.deck.stats.totalNonlands} · Lands: {result.deck.stats.totalLands}
-          </p>
-          <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <div>
-              <h3 className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Spells</h3>
-              <ul className="mt-1 max-h-48 overflow-auto text-sm">
-                {result.deck.main.map((c, i) => (
-                  <li key={`${c.name}-${i}`}>
-                    {c.quantity}x {c.name}
-                    {c.role && <span className="text-zinc-500"> ({c.role})</span>}
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div>
-              <h3 className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Lands</h3>
-              <ul className="mt-1 max-h-48 overflow-auto text-sm">
-                {result.deck.lands.map((c, i) => (
-                  <li key={`${c.name}-${i}`}>
-                    {c.quantity}x {c.name}
-                  </li>
-                ))}
-              </ul>
-            </div>
+          <div className="mt-4 rounded-lg border border-zinc-200 bg-zinc-50/50 p-4 dark:border-zinc-700 dark:bg-zinc-900/50">
+            <DeckStats
+              main={result.deck.main}
+              lands={result.deck.lands}
+              totalNonlands={result.deck.stats.totalNonlands}
+              totalLands={result.deck.stats.totalLands}
+              compact
+            />
+          </div>
+          <div className="mt-4">
+            <DeckListByType main={result.deck.main} lands={result.deck.lands} showRole compact />
           </div>
         </div>
       </div>

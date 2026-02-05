@@ -45,6 +45,7 @@ export interface CardInDeck {
   quantity: number;
   role?: CardRole;
   cmc?: number;
+  typeLine?: string;
   imageUrl?: string;
 }
 

@@ -1,0 +1,239 @@
+"use client";
+
+const CARD_TYPES = ["Creature", "Artifact", "Enchantment", "Instant", "Sorcery", "Planeswalker", "Land"] as const;
+
+const DISPLAY_TYPE_ORDER: readonly string[] = ["Creature", "Artifact", "Enchantment", "Instant", "Sorcery", "Planeswalker", "Other"];
+
+/** Assign a card to one display bucket by primary type (Creature > Artifact > Enchantment > Instant > Sorcery > Planeswalker). */
+function getPrimaryType(typeLine?: string): string {
+  const line = (typeLine ?? "").toLowerCase();
+  if (line.includes("creature")) return "Creature";
+  if (line.includes("artifact")) return "Artifact";
+  if (line.includes("enchantment")) return "Enchantment";
+  if (line.includes("instant")) return "Instant";
+  if (line.includes("sorcery")) return "Sorcery";
+  if (line.includes("planeswalker")) return "Planeswalker";
+  return "Other";
+}
+
+type DeckCard = {
+  name: string;
+  quantity: number;
+  typeLine?: string;
+  role?: string;
+  imageUrl?: string;
+};
+
+export function groupMainByType(main: Array<DeckCard>): Record<string, DeckCard[]> {
+  const groups: Record<string, DeckCard[]> = {};
+  for (const label of DISPLAY_TYPE_ORDER) groups[label] = [];
+
+  for (const c of main) {
+    const type = getPrimaryType(c.typeLine);
+    groups[type].push({
+      name: c.name,
+      quantity: c.quantity ?? 1,
+      typeLine: c.typeLine,
+      role: c.role,
+      imageUrl: c.imageUrl,
+    });
+  }
+  return groups;
+}
+
+function countByType(
+  main: Array<{ typeLine?: string; quantity?: number }>,
+  lands: Array<{ name: string; quantity?: number }>
+): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const t of CARD_TYPES) counts[t] = 0;
+
+  for (const c of main) {
+    const qty = c.quantity ?? 1;
+    const line = (c.typeLine ?? "").toLowerCase();
+    if (line.includes("creature")) counts["Creature"] += qty;
+    if (line.includes("artifact")) counts["Artifact"] += qty;
+    if (line.includes("enchantment")) counts["Enchantment"] += qty;
+    if (line.includes("instant")) counts["Instant"] += qty;
+    if (line.includes("sorcery")) counts["Sorcery"] += qty;
+    if (line.includes("planeswalker")) counts["Planeswalker"] += qty;
+    if (line.includes("land")) counts["Land"] += qty;
+  }
+  for (const c of lands) {
+    counts["Land"] += c.quantity ?? 1;
+  }
+  return counts;
+}
+
+function getCurve(main: Array<{ cmc?: number; quantity?: number }>): { cmc: number; count: number }[] {
+  const buckets: number[] = [0, 0, 0, 0, 0, 0, 0, 0]; // 0, 1, 2, 3, 4, 5, 6, 7+
+
+  for (const c of main) {
+    const cmc = typeof c.cmc === "number" ? c.cmc : 0;
+    const qty = c.quantity ?? 1;
+    const key = cmc >= 7 ? 7 : Math.max(0, cmc);
+    buckets[key] += qty;
+  }
+
+  return buckets.map((count, cmc) => ({ cmc: cmc === 7 ? 7 : cmc, count }));
+}
+
+function getAvgCmc(main: Array<{ cmc?: number; quantity?: number }>): number | null {
+  let total = 0;
+  let n = 0;
+  for (const c of main) {
+    const cmc = typeof c.cmc === "number" ? c.cmc : 0;
+    const qty = c.quantity ?? 1;
+    total += cmc * qty;
+    n += qty;
+  }
+  return n > 0 ? Math.round((total / n) * 10) / 10 : null;
+}
+
+interface DeckStatsProps {
+  main: Array<{ name: string; quantity?: number; typeLine?: string; cmc?: number }>;
+  lands: Array<{ name: string; quantity?: number }>;
+  totalNonlands?: number;
+  totalLands?: number;
+  compact?: boolean;
+}
+
+export function DeckStats({ main, lands, totalNonlands, totalLands, compact }: DeckStatsProps) {
+  const byType = countByType(main, lands);
+  const curve = getCurve(main);
+  const avgCmc = getAvgCmc(main);
+  const maxCurve = Math.max(1, ...curve.map((b) => b.count));
+
+  return (
+    <div className={compact ? "space-y-3" : "space-y-4"}>
+      <section>
+        <h3 className={compact ? "text-sm font-medium text-zinc-700 dark:text-zinc-300" : "text-base font-semibold text-zinc-800 dark:text-zinc-200"}>
+          Card types
+        </h3>
+        <div className={`mt-1 flex flex-wrap gap-x-4 gap-y-0.5 ${compact ? "text-sm" : "text-sm"}`}>
+          {CARD_TYPES.filter((t) => byType[t] > 0).map((t) => (
+            <span key={t} className="text-zinc-600 dark:text-zinc-400">
+              {t}: <span className="font-medium text-zinc-900 dark:text-zinc-100">{byType[t]}</span>
+            </span>
+          ))}
+        </div>
+      </section>
+
+      {curve.some((b) => b.count > 0) && (
+        <section>
+          <h3 className={compact ? "text-sm font-medium text-zinc-700 dark:text-zinc-300" : "text-base font-semibold text-zinc-800 dark:text-zinc-200"}>
+            Mana curve (nonlands)
+          </h3>
+          <div className="mt-2 flex items-end gap-0.5">
+            {curve.map((b) => (
+              <div
+                key={b.cmc}
+                className="flex flex-col items-center gap-0.5"
+                style={{ width: "2rem" }}
+                title={`CMC ${b.cmc === 7 ? "7+" : b.cmc}: ${b.count} cards`}
+              >
+                <div
+                  className="w-full min-h-[0.25rem] rounded-t bg-zinc-700 dark:bg-zinc-500 transition-all"
+                  style={{ height: `${maxCurve > 0 ? (b.count / maxCurve) * 4 : 0}rem` }}
+                />
+                <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                  {b.cmc === 7 ? "7+" : b.cmc}
+                </span>
+              </div>
+            ))}
+          </div>
+          {avgCmc != null && (
+            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+              Average CMC: <span className="font-medium text-zinc-700 dark:text-zinc-300">{avgCmc}</span>
+            </p>
+          )}
+        </section>
+      )}
+
+      {(totalNonlands != null || totalLands != null) && (
+        <p className={compact ? "text-sm text-zinc-500 dark:text-zinc-400" : "text-sm text-zinc-600 dark:text-zinc-400"}>
+          {totalNonlands != null && totalLands != null
+            ? `${totalNonlands} nonlands, ${totalLands} lands`
+            : totalNonlands != null
+              ? `${totalNonlands} nonlands`
+              : `${totalLands} lands`}
+        </p>
+      )}
+    </div>
+  );
+}
+
+interface DeckListByTypeProps {
+  main: Array<{ name: string; quantity?: number; typeLine?: string; role?: string; imageUrl?: string }>;
+  lands: Array<{ name: string; quantity?: number; imageUrl?: string }>;
+  showRole?: boolean;
+  compact?: boolean;
+}
+
+export function DeckListByType({ main, lands, showRole = true, compact }: DeckListByTypeProps) {
+  const byType = groupMainByType(main);
+  const maxHeight = compact ? "max-h-48" : "max-h-96";
+  const nonEmptyTypes = DISPLAY_TYPE_ORDER.filter((type) => byType[type].length > 0);
+
+  const sectionLabel = (type: string) => (type === "Other" ? "Other" : `${type}s`);
+
+  return (
+    <div className="grid gap-6 sm:grid-cols-2">
+      <div className="min-w-0 space-y-4">
+        {nonEmptyTypes.map((type) => (
+          <section key={type} className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900">
+            <h3 className="text-lg font-semibold text-zinc-800 dark:text-zinc-200">
+              {sectionLabel(type)} ({byType[type].length})
+            </h3>
+            <ul className={`mt-2 overflow-auto rounded bg-zinc-50/80 p-3 dark:bg-zinc-800/50 ${maxHeight}`}>
+              {byType[type].map((c, i) => (
+                <li key={`${c.name}-${i}`} className="flex items-center gap-3 py-1.5 text-sm">
+                  {c.imageUrl ? (
+                    <img
+                      src={c.imageUrl}
+                      alt=""
+                      className="h-16 w-[44px] shrink-0 rounded object-cover shadow-md border border-zinc-200 dark:border-zinc-600"
+                      loading="lazy"
+                      title={c.name}
+                    />
+                  ) : (
+                    <span className="h-16 w-[44px] shrink-0 rounded bg-zinc-300 dark:bg-zinc-600" aria-hidden />
+                  )}
+                  <span>
+                    {c.quantity}x {c.name}
+                    {showRole && c.role && <span className="text-zinc-500"> — {c.role}</span>}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
+      </div>
+      <div className="min-w-0">
+        <section className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900">
+          <h3 className="text-lg font-semibold text-zinc-800 dark:text-zinc-200">
+            Lands ({lands.length})
+          </h3>
+          <ul className={`mt-2 overflow-auto rounded bg-zinc-50/80 p-3 dark:bg-zinc-800/50 ${maxHeight}`}>
+            {lands.map((c, i) => (
+              <li key={`${c.name}-${i}`} className="flex items-center gap-3 py-1.5 text-sm">
+                {c.imageUrl ? (
+                  <img
+                    src={c.imageUrl}
+                    alt=""
+                    className="h-16 w-[44px] shrink-0 rounded object-cover shadow-md border border-zinc-200 dark:border-zinc-600"
+                    loading="lazy"
+                    title={c.name}
+                  />
+                ) : (
+                  <span className="h-16 w-[44px] shrink-0 rounded bg-zinc-300 dark:bg-zinc-600" aria-hidden />
+                )}
+                <span>{c.quantity ?? 1}x {c.name}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      </div>
+    </div>
+  );
+}
