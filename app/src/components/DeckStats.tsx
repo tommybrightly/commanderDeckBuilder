@@ -1,5 +1,7 @@
 "use client";
 
+import { useState, useRef, useCallback } from "react";
+
 const CARD_TYPES = ["Creature", "Artifact", "Enchantment", "Instant", "Sorcery", "Planeswalker", "Land"] as const;
 
 const DISPLAY_TYPE_ORDER: readonly string[] = ["Creature", "Artifact", "Enchantment", "Instant", "Sorcery", "Planeswalker", "Other"];
@@ -170,7 +172,99 @@ interface DeckListByTypeProps {
   compact?: boolean;
 }
 
+const PREVIEW_CARD_W = 280;
+const PREVIEW_CARD_H = 392;
+const PREVIEW_PADDING = 24;
+const PREVIEW_OFFSET = 12;
+
+function clampPreviewPosition(clientX: number, clientY: number): { left: number; top: number } {
+  const w = PREVIEW_CARD_W + PREVIEW_PADDING * 2;
+  const h = PREVIEW_CARD_H + PREVIEW_PADDING * 2 + 28; // +label
+  let left = clientX + PREVIEW_OFFSET;
+  let top = clientY + PREVIEW_OFFSET;
+  if (typeof window !== "undefined") {
+    if (left + w > window.innerWidth) left = window.innerWidth - w - 8;
+    if (left < 8) left = 8;
+    if (top + h > window.innerHeight) top = window.innerHeight - h - 8;
+    if (top < 8) top = 8;
+  }
+  return { left, top };
+}
+
+/** Larger card preview shown at cursor. Standard card ratio ~2.5:3.5. */
+function CardHoverPreview({
+  name,
+  imageUrl,
+  left,
+  top,
+  onCancelHide,
+  onRequestClose,
+}: {
+  name: string;
+  imageUrl: string;
+  left: number;
+  top: number;
+  onCancelHide: () => void;
+  onRequestClose: () => void;
+}) {
+  return (
+    <div
+      className="fixed z-50 rounded-lg border-2 border-zinc-300 bg-zinc-100 p-3 shadow-2xl dark:border-zinc-600 dark:bg-zinc-800 pointer-events-auto"
+      style={{ left, top }}
+      onMouseEnter={onCancelHide}
+      onMouseLeave={onRequestClose}
+      role="tooltip"
+      aria-label={`Preview: ${name}`}
+    >
+      <img
+        src={imageUrl}
+        alt={name}
+        className="block rounded shadow-lg"
+        style={{ width: `${PREVIEW_CARD_W}px`, height: `${PREVIEW_CARD_H}px`, objectFit: "cover" }}
+      />
+      <p className="mt-2 max-w-[280px] truncate text-center text-sm font-medium text-zinc-800 dark:text-zinc-200">
+        {name}
+      </p>
+    </div>
+  );
+}
+
 export function DeckListByType({ main, lands, showRole = true, compact }: DeckListByTypeProps) {
+  const [hovered, setHovered] = useState<{ name: string; imageUrl: string; left: number; top: number } | null>(null);
+  const hideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showPreview = useCallback((name: string, imageUrl: string, clientX: number, clientY: number) => {
+    if (hideTimeoutRef.current) {
+      clearTimeout(hideTimeoutRef.current);
+      hideTimeoutRef.current = null;
+    }
+    const { left, top } = clampPreviewPosition(clientX, clientY);
+    setHovered({ name, imageUrl, left, top });
+  }, []);
+
+  const updatePreviewPosition = useCallback((clientX: number, clientY: number) => {
+    setHovered((prev) => {
+      if (!prev) return null;
+      const { left, top } = clampPreviewPosition(clientX, clientY);
+      return { ...prev, left, top };
+    });
+  }, []);
+
+  const hidePreview = useCallback((delayMs = 0) => {
+    if (delayMs === 0) {
+      if (hideTimeoutRef.current) {
+        clearTimeout(hideTimeoutRef.current);
+        hideTimeoutRef.current = null;
+      }
+      setHovered(null);
+    } else {
+      hideTimeoutRef.current = setTimeout(() => {
+        hideTimeoutRef.current = null;
+        setHovered(null);
+      }, delayMs);
+    }
+  }, []);
+
   const byType = groupMainByType(main);
   const maxHeight = compact ? "max-h-48" : "max-h-96";
   const nonEmptyTypes = DISPLAY_TYPE_ORDER.filter((type) => byType[type].length > 0);
@@ -178,62 +272,93 @@ export function DeckListByType({ main, lands, showRole = true, compact }: DeckLi
   const sectionLabel = (type: string) => (type === "Other" ? "Other" : `${type}s`);
 
   return (
-    <div className="grid gap-6 sm:grid-cols-2">
-      <div className="min-w-0 space-y-4">
-        {nonEmptyTypes.map((type) => (
-          <section key={type} className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900">
+    <>
+      <div className="grid gap-6 sm:grid-cols-2">
+        <div className="min-w-0 space-y-4">
+          {nonEmptyTypes.map((type) => (
+            <section key={type} className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900">
+              <h3 className="text-lg font-semibold text-zinc-800 dark:text-zinc-200">
+                {sectionLabel(type)} ({byType[type].length})
+              </h3>
+              <ul className={`mt-2 overflow-auto rounded bg-zinc-50/80 p-3 dark:bg-zinc-800/50 ${maxHeight}`}>
+                {byType[type].map((c, i) => (
+                  <li key={`${c.name}-${i}`} className="flex items-center gap-3 py-1.5 text-sm">
+                    {c.imageUrl ? (
+                      <span
+                        className="relative inline-block cursor-pointer"
+                        onMouseEnter={(e) => showPreview(c.name, c.imageUrl, e.clientX, e.clientY)}
+                        onMouseMove={(e) => updatePreviewPosition(e.clientX, e.clientY)}
+                        onMouseLeave={() => hidePreview(200)}
+                      >
+                        <img
+                          src={c.imageUrl}
+                          alt=""
+                          className="h-16 w-[44px] shrink-0 rounded object-cover shadow-md border border-zinc-200 dark:border-zinc-600"
+                          loading="lazy"
+                          title={c.name}
+                        />
+                      </span>
+                    ) : (
+                      <span className="h-16 w-[44px] shrink-0 rounded bg-zinc-300 dark:bg-zinc-600" aria-hidden />
+                    )}
+                    <span>
+                      {c.quantity}x {c.name}
+                      {showRole && c.role && <span className="text-zinc-500"> — {c.role}</span>}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))}
+        </div>
+        <div className="min-w-0">
+          <section className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900">
             <h3 className="text-lg font-semibold text-zinc-800 dark:text-zinc-200">
-              {sectionLabel(type)} ({byType[type].length})
+              Lands ({lands.length})
             </h3>
             <ul className={`mt-2 overflow-auto rounded bg-zinc-50/80 p-3 dark:bg-zinc-800/50 ${maxHeight}`}>
-              {byType[type].map((c, i) => (
+              {lands.map((c, i) => (
                 <li key={`${c.name}-${i}`} className="flex items-center gap-3 py-1.5 text-sm">
                   {c.imageUrl ? (
-                    <img
-                      src={c.imageUrl}
-                      alt=""
-                      className="h-16 w-[44px] shrink-0 rounded object-cover shadow-md border border-zinc-200 dark:border-zinc-600"
-                      loading="lazy"
-                      title={c.name}
-                    />
+                    <span
+                      className="relative inline-block cursor-pointer"
+                      onMouseEnter={(e) => showPreview(c.name, c.imageUrl, e.clientX, e.clientY)}
+                      onMouseMove={(e) => updatePreviewPosition(e.clientX, e.clientY)}
+                      onMouseLeave={() => hidePreview(200)}
+                    >
+                      <img
+                        src={c.imageUrl}
+                        alt=""
+                        className="h-16 w-[44px] shrink-0 rounded object-cover shadow-md border border-zinc-200 dark:border-zinc-600"
+                        loading="lazy"
+                        title={c.name}
+                      />
+                    </span>
                   ) : (
                     <span className="h-16 w-[44px] shrink-0 rounded bg-zinc-300 dark:bg-zinc-600" aria-hidden />
                   )}
-                  <span>
-                    {c.quantity}x {c.name}
-                    {showRole && c.role && <span className="text-zinc-500"> — {c.role}</span>}
-                  </span>
+                  <span>{c.quantity ?? 1}x {c.name}</span>
                 </li>
               ))}
             </ul>
           </section>
-        ))}
+        </div>
       </div>
-      <div className="min-w-0">
-        <section className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900">
-          <h3 className="text-lg font-semibold text-zinc-800 dark:text-zinc-200">
-            Lands ({lands.length})
-          </h3>
-          <ul className={`mt-2 overflow-auto rounded bg-zinc-50/80 p-3 dark:bg-zinc-800/50 ${maxHeight}`}>
-            {lands.map((c, i) => (
-              <li key={`${c.name}-${i}`} className="flex items-center gap-3 py-1.5 text-sm">
-                {c.imageUrl ? (
-                  <img
-                    src={c.imageUrl}
-                    alt=""
-                    className="h-16 w-[44px] shrink-0 rounded object-cover shadow-md border border-zinc-200 dark:border-zinc-600"
-                    loading="lazy"
-                    title={c.name}
-                  />
-                ) : (
-                  <span className="h-16 w-[44px] shrink-0 rounded bg-zinc-300 dark:bg-zinc-600" aria-hidden />
-                )}
-                <span>{c.quantity ?? 1}x {c.name}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      </div>
-    </div>
+      {hovered && (
+        <CardHoverPreview
+          name={hovered.name}
+          imageUrl={hovered.imageUrl}
+          left={hovered.left}
+          top={hovered.top}
+          onCancelHide={() => {
+            if (hideTimeoutRef.current) {
+              clearTimeout(hideTimeoutRef.current);
+              hideTimeoutRef.current = null;
+            }
+          }}
+          onRequestClose={() => hidePreview(150)}
+        />
+      )}
+    </>
   );
 }
