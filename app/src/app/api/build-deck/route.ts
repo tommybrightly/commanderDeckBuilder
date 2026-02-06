@@ -3,7 +3,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { buildDeck, buildDeckFromCardNames } from "@/lib/mtg/deckBuilderEngine";
 import { getAIDeckList, getStrategyExplanation } from "@/lib/mtg/aiDeckBuilder";
-import { parseTextList, parseCsv } from "@/lib/mtg/parseCollection";
+import { parseTextList, parseCsv, detectInputFormat } from "@/lib/mtg/parseCollection";
 import { enrichCollection } from "@/lib/mtg/enrichCollection";
 import { dbCardToCardInfo, getCardsByNamesFromDb, getCardByNameFromDb } from "@/lib/mtg/cardDb";
 import type { CommanderChoice, DeckArchetype } from "@/lib/mtg/types";
@@ -42,7 +42,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const format = inputFormat ?? "text";
+  let format = inputFormat ?? "text";
   let owned: Array<{ name: string; quantity: number; setCode?: string; collectorNumber?: string }>;
   let usedCollectionId: string | null = null;
   let collection: { id: string; rawInput: string } | null = null;
@@ -59,6 +59,7 @@ export async function POST(req: Request) {
     }
     collection = coll;
     usedCollectionId = coll.id;
+    if (!inputFormat) format = detectInputFormat(coll.rawInput);
     owned =
       format === "csv"
         ? parseCsv(coll.rawInput)

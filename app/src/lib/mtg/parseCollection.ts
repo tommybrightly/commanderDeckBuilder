@@ -66,6 +66,26 @@ function stripBom(s: string): string {
   return s.length > 0 && s.charCodeAt(0) === 0xfeff ? s.slice(1) : s;
 }
 
+/**
+ * Guess whether rawInput is CSV (e.g. has a header row with "Name" or "Card") or a plain text list.
+ * Use when the client didn't send inputFormat (e.g. building from a saved collection).
+ */
+export function detectInputFormat(rawInput: string): "text" | "csv" {
+  const raw = stripBom(rawInput.trim());
+  const firstLine = raw.split(/\r?\n/)[0]?.trim() ?? "";
+  if (!firstLine) return "text";
+  const lower = firstLine.toLowerCase();
+  if (lower.includes(",")) {
+    const cells = firstLine.split(",").map((c) => c.trim().toLowerCase().replace(/\ufeff/g, ""));
+    if (cells.some((c) => c === "name" || c === "card" || /^(count|quantity|qty|set code|set name|collector number)$/.test(c))) return "csv";
+  }
+  if (lower.includes(";")) {
+    const cells = firstLine.split(";").map((c) => c.trim().toLowerCase().replace(/\ufeff/g, ""));
+    if (cells.some((c) => c === "name" || c === "card")) return "csv";
+  }
+  return "text";
+}
+
 /** Normalize cell for header matching: trim, strip BOM, collapse Unicode spaces. */
 function normCell(c: string): string {
   return (c ?? "")
