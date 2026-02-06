@@ -13,6 +13,8 @@
   --arcane: rgba(139, 92, 246, 0.12);
   --radius: 0.75rem;
   /* Nav — mana-inspired accents */
+  --nav-home: rgba(248, 113, 113, 0.22);
+  --nav-home-text: #fca5a5;
   --nav-collections: rgba(96, 165, 250, 0.2);
   --nav-collections-text: #93c5fd;
   --nav-build: rgba(251, 191, 36, 0.2);
@@ -107,6 +109,10 @@ body::before {
 }
 .nav-link:hover {
   color: var(--foreground);
+}
+nav a.nav-link-home:hover {
+  background: rgba(248, 113, 113, 0.28);
+  color: #fca5a5;
 }
 nav a.nav-link-collections:hover {
   background: rgba(96, 165, 250, 0.28);

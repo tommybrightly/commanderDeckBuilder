@@ -12,6 +12,9 @@ export function Header() {
           Commander Deck Builder
         </Link>
         <nav className="flex items-center gap-2">
+          <Link href="/" className="nav-link nav-link-home">
+            Home
+          </Link>
           <Link href="/collections" className="nav-link nav-link-collections">
             Collections
           </Link>
