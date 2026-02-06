@@ -149,11 +149,19 @@ export async function POST(req: Request) {
 
         const enforceLegalityOption = enforceLegality ?? true;
         const archetypeOption = archetype ?? "balanced";
-        const commanderInfo = cardInfos.get(commander.name.toLowerCase()) ?? await getCardByNameFromDb(commander.name);
+        const commanderInfo = cardInfos?.get(commander.name.toLowerCase()) ?? await getCardByNameFromDb(commander.name);
         if (!commanderInfo) {
           send({
             type: "error",
             error: `Commander not found: ${commander.name}. Sync the card database from Settings.`,
+          });
+          controller.close();
+          return;
+        }
+        if (!cardInfos) {
+          send({
+            type: "error",
+            error: "No cards in collection or list to build from.",
           });
           controller.close();
           return;
@@ -175,7 +183,7 @@ export async function POST(req: Request) {
               landNames: aiResult.lands,
               owned,
               commander,
-              cardInfos: cardInfos!,
+              cardInfos,
               enforceLegality: enforceLegalityOption,
               commanderInfo,
             });

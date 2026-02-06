@@ -26,7 +26,9 @@ type DeckCard = {
   imageUrl?: string;
 };
 
-export function groupMainByType(main: Array<DeckCard>): Record<string, DeckCard[]> {
+export function groupMainByType(
+  main: Array<{ name: string; quantity?: number; typeLine?: string; role?: string; imageUrl?: string }>
+): Record<string, DeckCard[]> {
   const groups: Record<string, DeckCard[]> = {};
   for (const label of DISPLAY_TYPE_ORDER) groups[label] = [];
 
@@ -246,7 +248,8 @@ export function DeckListByType({ main, lands, showRole = true, compact }: DeckLi
   const [hovered, setHovered] = useState<{ name: string; imageUrl: string; left: number; top: number } | null>(null);
   const hideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const showPreview = useCallback((name: string, imageUrl: string, clientX: number, clientY: number) => {
+  const showPreview = useCallback((name: string, imageUrl: string | undefined, clientX: number, clientY: number) => {
+    if (!imageUrl) return;
     if (hideTimeoutRef.current) {
       clearTimeout(hideTimeoutRef.current);
       hideTimeoutRef.current = null;
@@ -364,7 +367,7 @@ export function DeckListByType({ main, lands, showRole = true, compact }: DeckLi
                 {c.imageUrl ? (
                   <span
                     className="relative inline-block cursor-pointer"
-                    onMouseEnter={(e) => showPreview(c.name, c.imageUrl!, e.clientX, e.clientY)}
+                    onMouseEnter={(e) => showPreview(c.name, c.imageUrl, e.clientX, e.clientY)}
                     onMouseMove={(e) => updatePreviewPosition(e.clientX, e.clientY)}
                     onMouseLeave={() => hidePreview(200)}
                   >
