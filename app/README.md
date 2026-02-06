@@ -49,14 +49,12 @@ Open [http://localhost:3000](http://localhost:3000). Sign in with Google, go to 
 - **Enrichment:** The first time you build from a collection, the app resolves each card name to a row in `Card` and saves `CollectionItem` rows. If any name isn’t in the DB, you’ll be told to sync first.
 - **Deck building:** The engine picks cards from your (enriched) collection by role and curve and obeys the legality toggle.
 
-## Hosting
+## Putting it on the internet
 
-You can deploy this app to any host that runs Node and supports SQLite or Postgres.
+**Step-by-step: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** — Railway (SQLite) or Vercel + Neon (Postgres).
 
 - **Vercel:** Works for the app, but serverless timeouts (e.g. 60s) may cut off the first **Sync card database** run (it can take 2–5 minutes). Options: (1) Run sync once locally, then copy `prisma/dev.db` into your project and deploy (not ideal for Vercel’s read-only filesystem), or (2) Use a plan with longer function timeout and run sync from the deployed app.
 - **Railway / Render / Fly.io:** Good fit. Persistent disk for SQLite, longer request timeouts. Run **Sync card database** from Settings after deploy. Optionally re-run periodically (e.g. monthly) or add a cron that calls `POST /api/cards/sync`.
-- **Database:** For production you may switch `DATABASE_URL` to Postgres (e.g. Railway Postgres, Neon) and run `prisma migrate deploy`. The card sync and all features work the same.
-
 ## Testing
 
 Run deck builder tests: `npm run test`. See **[docs/TESTING_AND_RULES.md](docs/TESTING_AND_RULES.md)** for what’s covered (deck size, color identity, legality, no duplicates) and how to verify that builds follow Commander rules. The doc also explains how “most powerful” is defined (role + curve heuristics, not win-rate optimization).
