@@ -8,6 +8,9 @@ import type {
   OwnedCard,
 } from "./types";
 import { getCardsByNamesFromDb, getCardByNameFromDb } from "./cardDb";
+import type { CommanderThemeId } from "./commanderThemes";
+import { getCommanderThemes, commanderSynergyScore } from "./commanderThemes";
+import { getCommanderThemesFromAI } from "./aiDeckBuilder";
 
 /**
  * Mana curve targets (commander-dependent in practice; these are defaults):
@@ -50,19 +53,39 @@ const CREATURE_SUBTYPES = new Set([
 ]);
 
 /**
- * Extract creature types (tribes) the commander's ability cares about from oracle text only.
- * E.g. Kaalia "put an Angel, Demon, or Dragon" -> ["angel", "demon", "dragon"].
- * We use oracle text only so the commander's own type line (e.g. Human, Cleric) doesn't become the theme.
+ * Extract creature subtypes from a type line (e.g. "Legendary Creature — Dragon Avatar" -> ["dragon"]).
+ * Used so we never miss tribal commanders like The Ur-Dragon when oracle text is missing or phrased differently.
  */
-function getPreferredTribes(commander: CardInfo): string[] {
-  const raw = (commander.oracleText ?? "").toLowerCase();
-  if (!raw.trim()) return [];
+function getTribesFromTypeLine(typeLine: string | undefined): string[] {
+  const line = (typeLine ?? "").toLowerCase();
+  const dash = line.indexOf("—");
+  const subtypePart = dash >= 0 ? line.slice(dash + 1) : line;
   const found: string[] = [];
   for (const subtype of CREATURE_SUBTYPES) {
     const re = new RegExp(`\\b${subtype}s?\\b`, "i");
-    if (re.test(raw)) found.push(subtype);
+    if (re.test(subtypePart)) found.push(subtype);
   }
-  return [...new Set(found)];
+  return found;
+}
+
+/**
+ * Extract creature types (tribes) the commander cares about. Everything revolves around the commander:
+ * 1) Oracle text (e.g. "Dragon spells cost 1 less", "put an Angel, Demon, or Dragon") -> tribe payoffs.
+ * 2) Commander's own type line (e.g. "Legendary Creature — Dragon Avatar") only when oracle has no tribes,
+ *    so we never miss Ur-Dragon-style commanders even if oracle text is missing or phrased differently.
+ */
+function getPreferredTribes(commander: CardInfo): string[] {
+  const fromOracle: string[] = [];
+  const raw = (commander.oracleText ?? "").toLowerCase();
+  if (raw.trim()) {
+    for (const subtype of CREATURE_SUBTYPES) {
+      const re = new RegExp(`\\b${subtype}s?\\b`, "i");
+      if (re.test(raw)) fromOracle.push(subtype);
+    }
+  }
+  if (fromOracle.length > 0) return [...new Set(fromOracle)];
+  const fromTypeLine = getTribesFromTypeLine(commander.typeLine);
+  return fromTypeLine;
 }
 
 /** True if card's type line contains any of the given tribes (e.g. "Creature — Angel" matches "angel"). */
@@ -76,6 +99,12 @@ function cardMatchesTribes(card: CardInfo, tribes: string[]): boolean {
 function commanderCheatsCreatures(commander: CardInfo): boolean {
   const text = (commander.oracleText ?? "").toLowerCase();
   return /put\s+(a|an|target)\s+.*onto the battlefield/.test(text) || /put.*onto the battlefield.*(creature|angel|demon|dragon|card)/.test(text);
+}
+
+/** True if the commander reduces cost of (tribe) spells/creatures (e.g. Ur-Dragon "dragon spells cost 1 less"). Big tribe payoffs are then better. */
+function commanderReducesTribeCost(commander: CardInfo): boolean {
+  const text = (commander.oracleText ?? "").toLowerCase();
+  return /costs?\s+\d+\s+less/.test(text) || /cost\s+less/.test(text) || /\d+\s+less\s+to\s+cast/.test(text);
 }
 
 function typeLineIncludes(typeLine: string | undefined, type: string): boolean {
@@ -209,7 +238,12 @@ export async function buildDeck(params: {
   if (!commanderInfo) {
     throw new Error(`Commander not found: ${commander.name}. Sync the card database from Settings if you don't see commanders when searching.`);
   }
-  onProgress?.("building", 0.5, "Building deck…");
+  const BUILD_STEPS = 10;
+  const step = (i: number, msg: string) => {
+    const p = 0.05 + (0.93 * Math.min(i, BUILD_STEPS)) / BUILD_STEPS;
+    onProgress?.("building", p, msg);
+  };
+  step(0, "Analyzing commander…");
 
   const candidateEntries: Array<{ card: CardInfo; owned: OwnedCard; role: CardRole }> = [];
   for (const o of owned) {
@@ -263,6 +297,21 @@ export async function buildDeck(params: {
 
   const preferredTribes = getPreferredTribes(commanderInfo);
   const commanderCheats = commanderCheatsCreatures(commanderInfo);
+  const commanderCostReduce = commanderReducesTribeCost(commanderInfo);
+  let commanderThemes: CommanderThemeId[] = getCommanderThemes(commanderInfo);
+  try {
+    const aiThemes = await getCommanderThemesFromAI({
+      commanderName: commander.name,
+      oracleText: commanderInfo.oracleText ?? "",
+    });
+    if (aiThemes?.length)
+      commanderThemes = [...new Set([...commanderThemes, ...(aiThemes as CommanderThemeId[])])];
+  } catch {
+    // keep pattern-based themes only
+  }
+
+  const commanderIsSpellslinger = commanderThemes.includes("spellslinger");
+  const commanderIsVoltron = commanderThemes.includes("voltron");
 
   // Archetype-specific role targets and type caps
   if (archetype === "control") {
@@ -313,14 +362,19 @@ export async function buildDeck(params: {
     return weight - avgPenalty + towardTarget;
   }
 
+  /** Curve + commander-ability synergy so every slot prefers cards that support the commander. */
+  function curveWithSynergyScore(card: CardInfo, currentMain: CardInDeck[]): number {
+    return curveScore(card, currentMain) + commanderSynergyScore(card, commanderThemes);
+  }
+
   /**
    * Score for theme/synergy/finisher slots: prioritizes commander's game plan.
    * Tribe-matching cards get a large bonus so they beat generic curve filler.
-   * When the commander cheats creatures (e.g. Kaalia), tribe payoff creatures use a flatter curve so big Angels/Demons/Dragons rank above small filler.
+   * When the commander cheats or reduces cost (e.g. Kaalia, Ur-Dragon), tribe payoff creatures use a flatter curve so big payoffs rank above small filler.
    */
   function themeAwareScore(card: CardInfo, currentMain: CardInDeck[]): number {
     const matchesTribe = preferredTribes.length > 0 && cardMatchesTribes(card, preferredTribes);
-    const isPayoffCreature = matchesTribe && typeLineIncludes(card.typeLine, "creature") && commanderCheats;
+    const isPayoffCreature = matchesTribe && typeLineIncludes(card.typeLine, "creature") && (commanderCheats || commanderCostReduce);
     const cmc = typeof card.cmc === "number" ? card.cmc : 0;
     const totalCmc = currentMain.reduce((s, c) => s + (c.cmc ?? 0), 0);
     const count = currentMain.length;
@@ -329,8 +383,9 @@ export async function buildDeck(params: {
     const avgPenalty = newAvg > MAX_AVG_CMC ? (newAvg - MAX_AVG_CMC) * 0.3 : 0;  // lighter penalty for theme slots
     const towardTarget = Math.abs(newAvg - TARGET_AVG_CMC) < Math.abs((totalCmc / (count || 1)) - TARGET_AVG_CMC) ? 0.1 : 0;
     const base = weight - avgPenalty + towardTarget;
-    const themeBonus = matchesTribe ? 2.5 : 0;  // so tribe cards reliably beat generic 2-drops (curve ~1.0)
-    return base + themeBonus;
+    const themeBonus = matchesTribe ? 3.5 : 0;  // tribe cards must dominate so the deck revolves around the commander
+    const synergyBonus = commanderSynergyScore(card, commanderThemes);  // any commander: favor cards that support its abilities
+    return base + themeBonus + synergyBonus;
   }
 
   /** Score for spellslinger: favor instants and sorceries. */
@@ -338,7 +393,8 @@ export async function buildDeck(params: {
     const base = curveScore(card, currentMain);
     const line = (card.typeLine ?? "").toLowerCase();
     const spellBonus = (line.includes("instant") || line.includes("sorcery")) ? 1.8 : 0;
-    return base + spellBonus;
+    const synergyBonus = commanderSynergyScore(card, commanderThemes);
+    return base + spellBonus + synergyBonus;
   }
 
   /** Score for voltron: favor equipment and auras. */
@@ -346,23 +402,35 @@ export async function buildDeck(params: {
     const base = curveScore(card, currentMain);
     const line = (card.typeLine ?? "").toLowerCase();
     const voltronBonus = (line.includes("equipment") || line.includes("aura")) ? 2.0 : 0;
-    return base + voltronBonus;
+    const synergyBonus = commanderSynergyScore(card, commanderThemes);
+    return base + voltronBonus + synergyBonus;
+  }
+
+  /**
+   * Commander-centric: when the commander has a tribe (e.g. Dragons), prefer that tribe in EVERY role—ramp, draw, removal, sweepers.
+   * So dragon ramp beats non-dragon ramp, dragon draw beats non-dragon draw, etc. Everything revolves around the commander.
+   */
+  function tribePreferredScore(card: CardInfo, currentMain: CardInDeck[]): number {
+    const base = curveScore(card, currentMain);
+    const tribeBonus = preferredTribes.length > 0 && cardMatchesTribes(card, preferredTribes) ? 3.5 : 0;
+    const synergyBonus = commanderSynergyScore(card, commanderThemes);
+    return base + tribeBonus + synergyBonus;
   }
 
   type ScoreFn = (card: CardInfo, currentMain: CardInDeck[]) => number;
 
-  /** Which score to use for synergy/finisher/creature by archetype. */
+  /** Which score to use for synergy/finisher/creature. Commander abilities override: spellslinger theme uses spellslinger score even when archetype is balanced. */
   const synergyScoreFn: ScoreFn =
-    archetype === "spellslinger" ? spellslingerScore
-    : archetype === "voltron" ? curveScore
-    : archetype === "control" ? curveScore
+    archetype === "spellslinger" || commanderIsSpellslinger ? spellslingerScore
+    : archetype === "voltron" || commanderIsVoltron ? voltronScore
+    : archetype === "control" ? curveWithSynergyScore
     : (preferredTribes.length > 0 || archetype === "tribal") ? themeAwareScore
-    : curveScore;
+    : curveWithSynergyScore;
 
   const byRole = (r: CardRole) =>
     candidateEntries.filter((e) => e.role === r && !used.has(e.card.name.toLowerCase()));
 
-  // Type balance and creature targets by archetype
+  // Type balance and creature targets by archetype (and commander theme: spellslinger commander gets more spell slots)
   const { minCreatures: MIN_CREATURES, targetCreatures: TARGET_CREATURES, maxInstants: MAX_INSTANTS, maxSorceries: MAX_SORCERIES } = (() => {
     switch (archetype) {
       case "tribal":
@@ -377,8 +445,8 @@ export async function buildDeck(params: {
         return {
           minCreatures: 20,
           targetCreatures: preferredTribes.length > 0 ? 30 : 27,
-          maxInstants: 14,
-          maxSorceries: 10,
+          maxInstants: commanderIsSpellslinger ? 22 : 14,
+          maxSorceries: commanderIsSpellslinger ? 18 : 10,
         };
     }
   })();
@@ -414,13 +482,20 @@ export async function buildDeck(params: {
     }
   };
 
-  addBest(byRole("ramp"), targetRamp);
-  addBest(byRole("draw"), targetDraw);
-  addBest(byRole("removal"), targetRemoval);
-  addBest(byRole("sweeper"), targetSweeper);
+  // When commander has a tribe, prefer that tribe in every role; else prefer cards that synergize with commander abilities
+  const roleScoreFn = preferredTribes.length > 0 && archetype !== "spellslinger" ? tribePreferredScore : curveWithSynergyScore;
+  step(1, "Adding ramp…");
+  addBest(byRole("ramp"), targetRamp, { scoreFn: roleScoreFn });
+  step(2, "Adding draw…");
+  addBest(byRole("draw"), targetDraw, { scoreFn: roleScoreFn });
+  step(3, "Adding removal…");
+  addBest(byRole("removal"), targetRemoval, { scoreFn: roleScoreFn });
+  step(4, "Adding sweepers…");
+  addBest(byRole("sweeper"), targetSweeper, { scoreFn: roleScoreFn });
 
-  // Voltron: prioritize equipment and auras early
-  if (archetype === "voltron") {
+  step(5, "Adding theme synergy…");
+  // Voltron: prioritize equipment and auras early (by archetype or commander theme)
+  if (archetype === "voltron" || commanderIsVoltron) {
     const equipmentAuraPool = candidateEntries.filter(
       (e) =>
         e.role !== "land" &&
@@ -430,7 +505,8 @@ export async function buildDeck(params: {
     addBest(equipmentAuraPool, 14, { scoreFn: voltronScore });
   }
 
-  // Theme/synergy/finisher: scoring depends on archetype (theme-aware for balanced/tribal, spellslinger/voltron/control use their own)
+  // Commander-centric: when the commander has a tribe (Ur-Dragon, Kaalia, etc.), use ONLY tribe for synergy/finisher/creatures so the deck is exclusively on-theme when the pool allows
+  const themePoolTarget = preferredTribes.length > 0 && archetype !== "spellslinger" ? 32 : targetThemeSynergy;
   if (preferredTribes.length > 0 && archetype !== "spellslinger") {
     const themePool = candidateEntries.filter(
       (e) =>
@@ -439,11 +515,26 @@ export async function buildDeck(params: {
         (e.role === "synergy" || e.role === "finisher") &&
         cardMatchesTribes(e.card, preferredTribes)
     );
-    addBest(themePool, targetThemeSynergy, { scoreFn: synergyScoreFn });
+    addBest(themePool, themePoolTarget, { scoreFn: synergyScoreFn });
+    const tribeSynergyRest = candidateEntries.filter(
+      (e) =>
+        e.role === "synergy" && !used.has(e.card.name.toLowerCase()) && cardMatchesTribes(e.card, preferredTribes)
+    );
+    addBest(tribeSynergyRest, Math.min(main.length + 25, MAX_NONLANDS), { scoreFn: synergyScoreFn });
+    // No non-tribe synergy: with a large pool (e.g. 2000 cards) we want exclusively angels/demons/dragons or dragons
+  } else {
+    addBest(byRole("synergy"), targetThemeSynergy, { scoreFn: synergyScoreFn });
   }
-
-  addBest(byRole("synergy"), targetThemeSynergy, { scoreFn: synergyScoreFn });
-  addBest(byRole("finisher"), targetFinisher, { scoreFn: synergyScoreFn });
+  step(6, "Adding finishers…");
+  if (preferredTribes.length > 0 && archetype !== "spellslinger") {
+    const tribeFinishers = candidateEntries.filter(
+      (e) =>
+        e.role === "finisher" && !used.has(e.card.name.toLowerCase()) && cardMatchesTribes(e.card, preferredTribes)
+    );
+    addBest(tribeFinishers, main.length + targetFinisher, { scoreFn: synergyScoreFn });
+  } else {
+    addBest(byRole("finisher"), targetFinisher, { scoreFn: synergyScoreFn });
+  }
 
   // Reserve slots for enchantments and sorceries (still respect type caps)
   const utilityEnchantments = candidateEntries.filter(
@@ -452,24 +543,69 @@ export async function buildDeck(params: {
   const utilitySorceries = candidateEntries.filter(
     (e) => e.role === "utility" && !used.has(e.card.name.toLowerCase()) && typeLineIncludes(e.card.typeLine, "sorcery")
   );
-  addBest(utilityEnchantments, 5);
-  addBest(utilitySorceries, 5);
-  // Spellslinger: favor instants/sorceries in utility
-  addBest(byRole("utility"), MAX_NONLANDS - main.length, archetype === "spellslinger" ? { scoreFn: spellslingerScore } : undefined);
+  step(7, "Adding utility…");
+  addBest(utilityEnchantments, main.length + 5, { scoreFn: curveWithSynergyScore });
+  addBest(utilitySorceries, main.length + 5, { scoreFn: curveWithSynergyScore });
+  addBest(byRole("utility"), MAX_NONLANDS - main.length, archetype === "spellslinger" || commanderIsSpellslinger ? { scoreFn: spellslingerScore } : archetype === "voltron" || commanderIsVoltron ? { scoreFn: voltronScore } : { scoreFn: curveWithSynergyScore });
 
-  // Hit creature target (archetype-dependent). Prefer commander-theme when balanced/tribal.
+  step(8, "Filling creatures…");
   const creatureCount = countMainByType(main).creature ?? 0;
-  if (creatureCount < TARGET_CREATURES && main.length < MAX_NONLANDS && TARGET_CREATURES > 0) {
-    const creaturePool = candidateEntries.filter(
-      (e) =>
-        e.role !== "land" &&
-        !used.has(e.card.name.toLowerCase()) &&
-        typeLineIncludes(e.card.typeLine, "creature")
-    );
-    const toAdd = Math.min(TARGET_CREATURES - creatureCount, MAX_NONLANDS - main.length);
-    addBest(creaturePool, main.length + toAdd, { onlyType: "creature", scoreFn: synergyScoreFn });
+  const needCreatures = TARGET_CREATURES - creatureCount;
+  if (needCreatures > 0 && main.length < MAX_NONLANDS && TARGET_CREATURES > 0) {
+    if (preferredTribes.length > 0 && archetype !== "spellslinger") {
+      // Tribal commander: fill creature slots with tribe creatures ONLY so Ur-Dragon gets only Dragons, Kaalia only Angels/Demons/Dragons
+      const tribeCreaturePool = candidateEntries.filter(
+        (e) =>
+          e.role !== "land" &&
+          !used.has(e.card.name.toLowerCase()) &&
+          typeLineIncludes(e.card.typeLine, "creature") &&
+          cardMatchesTribes(e.card, preferredTribes)
+      );
+      const toAdd = Math.min(needCreatures, MAX_NONLANDS - main.length);
+      addBest(tribeCreaturePool, main.length + toAdd, { onlyType: "creature", scoreFn: themeAwareScore });
+      // If we still need more creatures (pool didn't have enough tribe), fill with non-tribe only as fallback so deck isn't short
+      const stillNeed = TARGET_CREATURES - (countMainByType(main).creature ?? 0);
+      if (stillNeed > 0 && main.length < MAX_NONLANDS) {
+        const fallbackPool = candidateEntries.filter(
+          (e) =>
+            e.role !== "land" &&
+            !used.has(e.card.name.toLowerCase()) &&
+            typeLineIncludes(e.card.typeLine, "creature")
+        );
+        addBest(fallbackPool, main.length + Math.min(stillNeed, MAX_NONLANDS - main.length), { onlyType: "creature", scoreFn: curveWithSynergyScore });
+      }
+    } else {
+      const creaturePool = candidateEntries.filter(
+        (e) =>
+          e.role !== "land" &&
+          !used.has(e.card.name.toLowerCase()) &&
+          typeLineIncludes(e.card.typeLine, "creature")
+      );
+      const toAdd = Math.min(needCreatures, MAX_NONLANDS - main.length);
+      addBest(creaturePool, main.length + toAdd, { onlyType: "creature", scoreFn: synergyScoreFn });
+    }
   }
 
+  // Commander-centric: guarantee minimum tribe creatures when the commander has a tribe (e.g. Ur-Dragon -> at least 28 Dragons)
+  const MIN_TRIBE_CREATURES = 28;
+  if (preferredTribes.length > 0 && archetype !== "spellslinger" && main.length < MAX_NONLANDS) {
+    const tribeCreatureCount = main.filter(
+      (c) => typeLineIncludes(c.typeLine, "creature") && preferredTribes.some((t) => (c.typeLine ?? "").toLowerCase().includes(t))
+    ).length;
+    if (tribeCreatureCount < MIN_TRIBE_CREATURES) {
+      const tribeCreaturePool = candidateEntries.filter(
+        (e) =>
+          e.role !== "land" &&
+          !used.has(e.card.name.toLowerCase()) &&
+          typeLineIncludes(e.card.typeLine, "creature") &&
+          cardMatchesTribes(e.card, preferredTribes)
+      );
+      const toAdd = Math.min(MIN_TRIBE_CREATURES - tribeCreatureCount, MAX_NONLANDS - main.length);
+      addBest(tribeCreaturePool, main.length + toAdd, { onlyType: "creature", scoreFn: themeAwareScore });
+    }
+  }
+
+  step(9, "Adding lands…");
   // Lands must match commander color identity (use effective identity for lands with empty stored).
   // Exclude basic land names so we add basics for free and don't use collection slots for them.
   const landCandidates = candidateEntries.filter(
@@ -518,6 +654,7 @@ export async function buildDeck(params: {
   const totalCards = main.length + landSlots.length;
   const shortBy = totalCards < 99 ? 99 - totalCards : undefined;
 
+  step(BUILD_STEPS, "Done");
   onProgress?.("building", 1, "Done");
 
   return {

@@ -61,6 +61,50 @@ Output exactly 99 card names, one per line. No numbers or bullets. First list al
   }
 }
 
+const VALID_THEME_IDS =
+  "spellslinger, tokens, counters, sacrifice, artifacts, enchantments, landfall, graveyard, attack, flying, lifegain, draw, voltron, etb, death, tap_untap, top_of_library, copy, commander_damage";
+
+/**
+ * Ask OpenAI for 3-5 theme keywords that describe what the commander's abilities support.
+ * Used to improve synergy scoring when pattern-based detection might miss nuances.
+ * Returns null if no API key or request fails.
+ */
+export async function getCommanderThemesFromAI(params: {
+  commanderName: string;
+  oracleText: string;
+}): Promise<string[] | null> {
+  const apiKey = process.env.OPENAI_API_KEY?.trim();
+  if (!apiKey) return null;
+
+  const openai = new OpenAI({ apiKey });
+  const { commanderName, oracleText } = params;
+
+  try {
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content: `You are an expert Magic: The Gathering Commander (EDH) deck builder. Reply with ONLY a comma-separated list of theme IDs. Use only these exact IDs: ${VALID_THEME_IDS}. Pick 3-5 that best describe what this commander's abilities support. No other text.`,
+        },
+        {
+          role: "user",
+          content: `Commander: ${commanderName}. Abilities: ${(oracleText || "").slice(0, 800)}. List 3-5 theme IDs from the allowed list, comma-separated.`,
+        },
+      ],
+      max_tokens: 80,
+    });
+
+    const text = completion.choices[0]?.message?.content?.trim();
+    if (!text) return null;
+    const ids = text.split(",").map((s) => s.trim().toLowerCase().replace(/\s+/g, "_"));
+    const validSet = new Set(VALID_THEME_IDS.split(", ").map((s) => s.trim().toLowerCase().replace(/\s+/g, "_")));
+    return ids.filter((id) => validSet.has(id));
+  } catch {
+    return null;
+  }
+}
+
 /** Strip "1. ", "- ", etc. from a line for card name lookup. */
 export function stripListMarker(line: string): string {
   return line

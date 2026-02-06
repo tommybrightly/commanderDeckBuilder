@@ -312,11 +312,13 @@ export function BuildClient() {
       )}
       {building && (
         <div className="space-y-2">
-          <div className="flex justify-between text-sm text-[var(--muted)]">
-            <span>{progressMessage}</span>
-            <span>{Math.round(progress * 100)}%</span>
+          <div className="flex justify-between gap-2 text-sm">
+            <span className="min-w-0 truncate text-[var(--muted)]" title={progressMessage}>
+              {progressMessage || "Building…"}
+            </span>
+            <span className="shrink-0 tabular-nums text-[var(--muted)]">{Math.round(progress * 100)}%</span>
           </div>
-          <div className="h-2 w-full overflow-hidden rounded-full bg-[var(--card-border)]">
+          <div className="h-2.5 w-full overflow-hidden rounded-full bg-[var(--card-border)]">
             <div
               className="h-full rounded-full bg-[var(--accent)] transition-[width] duration-300 ease-out"
               style={{ width: `${Math.min(100, progress * 100)}%` }}
