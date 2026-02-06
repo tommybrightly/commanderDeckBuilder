@@ -6,8 +6,11 @@ import { getAIDeckList, getStrategyExplanation } from "@/lib/mtg/aiDeckBuilder";
 import { parseTextList, parseCsv, detectInputFormat } from "@/lib/mtg/parseCollection";
 import { enrichCollection } from "@/lib/mtg/enrichCollection";
 import { dbCardToCardInfo, getCardsByNamesFromDb, getCardByNameFromDb } from "@/lib/mtg/cardDb";
+import { ensureCardDatabaseSynced } from "@/lib/mtg/syncCardDatabase";
 import type { CommanderChoice, DeckArchetype } from "@/lib/mtg/types";
 import type { CardInfo } from "@/lib/mtg/types";
+
+export const maxDuration = 300;
 
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
@@ -80,6 +83,10 @@ export async function POST(req: Request) {
         controller.enqueue(encoder.encode(JSON.stringify(obj) + "\n"));
       };
       try {
+        await ensureCardDatabaseSynced((message, progress) => {
+          send({ type: "progress", stage: "syncing", progress, message });
+        });
+
         let cardInfos: Map<string, CardInfo> | undefined;
 
         if (collectionId && collection) {

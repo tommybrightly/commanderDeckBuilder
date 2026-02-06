@@ -7,7 +7,7 @@ export type EnrichProgress = (done: number, total: number, message?: string) => 
 
 /**
  * Parse rawInput to OwnedCard[], resolve each to a Card in DB only,
- * then upsert CollectionItem rows. No Scryfall—card DB must be synced first (Settings → Sync card database).
+ * then upsert CollectionItem rows. The card DB is synced automatically when needed (e.g. when building).
  */
 export async function enrichCollection(
   collectionId: string,
