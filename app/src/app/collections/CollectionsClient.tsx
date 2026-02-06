@@ -93,30 +93,30 @@ export function CollectionsClient() {
 
   return (
     <div className="mt-6 space-y-8">
-      <section>
-        <h2 className="text-lg font-semibold text-zinc-800 dark:text-zinc-200">
+      <section className="card p-6">
+        <h2 className="text-lg font-semibold text-[var(--foreground)]">
           Add a collection
         </h2>
-        <div className="mt-2 flex flex-col gap-3">
+        <div className="mt-4 flex flex-col gap-3">
           <input
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Collection name"
-            className="max-w-xs rounded border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-900"
+            className="max-w-xs rounded-lg border border-[var(--card-border)] bg-[var(--card)] px-3 py-2 text-[var(--foreground)] placeholder:text-[var(--muted)] focus:border-[var(--accent)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
           />
           <div className="flex gap-2">
             <button
               type="button"
               onClick={() => setActiveTab("paste")}
-              className={`rounded px-3 py-1.5 text-sm ${activeTab === "paste" ? "bg-zinc-200 dark:bg-zinc-700" : "bg-zinc-100 dark:bg-zinc-800"}`}
+              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${activeTab === "paste" ? "bg-[var(--accent)] text-white" : "btn-secondary"}`}
             >
               Paste list
             </button>
             <button
               type="button"
               onClick={() => setActiveTab("csv")}
-              className={`rounded px-3 py-1.5 text-sm ${activeTab === "csv" ? "bg-zinc-200 dark:bg-zinc-700" : "bg-zinc-100 dark:bg-zinc-800"}`}
+              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${activeTab === "csv" ? "bg-[var(--accent)] text-white" : "btn-secondary"}`}
             >
               Upload CSV
             </button>
@@ -135,7 +135,7 @@ export function CollectionsClient() {
               onChange={(e) => setRawInput(e.target.value)}
               placeholder="3 Lightning Bolt&#10;1 Sol Ring (C14)"
               rows={8}
-              className="rounded border border-zinc-300 bg-white px-3 py-2 font-mono text-sm dark:border-zinc-600 dark:bg-zinc-900"
+              className="w-full rounded-lg border border-[var(--card-border)] bg-[var(--card)] px-3 py-2 font-mono text-sm text-[var(--foreground)] placeholder:text-[var(--muted)] focus:border-[var(--accent)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
             />
           )}
           {error && (
@@ -145,7 +145,7 @@ export function CollectionsClient() {
             type="button"
             onClick={handleSave}
             disabled={saving}
-            className="max-w-xs rounded bg-zinc-900 px-3 py-2 text-white disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
+            className="btn-primary max-w-xs"
           >
             {saving ? "Saving…" : "Save collection"}
           </button>
@@ -153,26 +153,26 @@ export function CollectionsClient() {
       </section>
 
       <section>
-        <h2 className="text-lg font-semibold text-zinc-800 dark:text-zinc-200">
+        <h2 className="text-lg font-semibold text-[var(--foreground)]">
           Saved collections
         </h2>
         {loading ? (
-          <p className="text-zinc-500">Loading…</p>
+          <p className="mt-2 text-[var(--muted)]">Loading…</p>
         ) : list.length === 0 ? (
-          <p className="text-zinc-500">No collections yet. Add one above.</p>
+          <p className="mt-2 text-[var(--muted)]">No collections yet. Add one above.</p>
         ) : (
-          <ul className="mt-2 space-y-2">
+          <ul className="mt-4 space-y-2">
             {list.map((c) => (
               <li
                 key={c.id}
-                className="flex items-center justify-between gap-2 rounded border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900"
+                className="card flex items-center justify-between gap-2 transition hover:border-[var(--accent)]/40"
               >
                 <Link
                   href={`/build?collectionId=${c.id}`}
-                  className="min-w-0 flex-1 px-4 py-3 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                  className="min-w-0 flex-1 px-4 py-3 transition hover:opacity-90"
                 >
-                  <span className="font-medium">{c.name}</span>
-                  <span className="ml-2 text-sm text-zinc-500">
+                  <span className="font-medium text-[var(--foreground)]">{c.name}</span>
+                  <span className="ml-2 text-sm text-[var(--muted)]">
                     Updated {new Date(c.updatedAt).toLocaleDateString()}
                   </span>
                 </Link>

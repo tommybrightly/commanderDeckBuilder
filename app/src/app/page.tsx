@@ -1,28 +1,33 @@
 import Link from "next/link";
 import { Header } from "@/components/Header";
+import { PageDirections } from "@/components/PageDirections";
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
+    <div className="relative min-h-screen">
       <Header />
-      <main className="mx-auto max-w-3xl px-4 py-12">
-        <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-100">
+      <main className="relative z-10 mx-auto max-w-3xl px-4 py-12">
+        <PageDirections
+          title="How to use this site"
+          steps={[
+            "Sign in with Google to save collections and decks.",
+            "Add a collection (paste a list or upload CSV) on Collections, or paste/upload when building.",
+            "Go to Build, choose a collection or paste cards, pick a commander and deck style, then click Build deck.",
+            "View and manage your decks under My Decks.",
+          ]}
+          className="mb-8"
+        />
+        <h1 className="text-3xl font-bold tracking-tight text-[var(--foreground)]">
           Build a Commander deck from your bulk
         </h1>
-        <p className="mt-4 text-lg text-zinc-600 dark:text-zinc-400">
-          Add your collection (paste a list or upload CSV), pick a commander, and get a 100-card deck built only from cards you own. You can turn off legality checks for casual play.
+        <p className="mt-4 text-lg leading-relaxed text-[var(--muted)]">
+          Add your collection, pick a commander, and get a 100-card deck built only from cards you own. Choose a deck style (tribal, spellslinger, voltron, and more) and optionally turn off legality for casual play.
         </p>
-        <div className="mt-8 flex flex-wrap gap-4">
-          <Link
-            href="/collections"
-            className="rounded-md bg-zinc-900 px-4 py-2 font-medium text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
-          >
+        <div className="mt-10 flex flex-wrap gap-4">
+          <Link href="/collections" className="btn-primary inline-block">
             My collections
           </Link>
-          <Link
-            href="/build"
-            className="rounded-md border border-zinc-300 px-4 py-2 font-medium text-zinc-900 hover:bg-zinc-100 dark:border-zinc-600 dark:text-zinc-100 dark:hover:bg-zinc-800"
-          >
+          <Link href="/build" className="btn-secondary inline-block">
             Build a deck
           </Link>
         </div>

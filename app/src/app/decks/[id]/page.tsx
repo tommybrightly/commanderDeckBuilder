@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getCardsByNamesFromDb } from "@/lib/mtg/cardDb";
 import { Header } from "@/components/Header";
+import { PageDirections } from "@/components/PageDirections";
 import { DeckView } from "./DeckView";
 
 export default async function DeckDetailPage({
@@ -54,9 +55,19 @@ export default async function DeckDetailPage({
     data = { ...raw, main: mainEnriched, lands: landsEnriched };
   }
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
+    <div className="relative min-h-screen">
       <Header />
-      <main className="mx-auto max-w-4xl px-4 py-8">
+      <main className="relative z-10 mx-auto max-w-4xl px-4 py-8">
+        <PageDirections
+          title="How to use this page"
+          steps={[
+            "View your deck list grouped by card type, with thumbnails and stats.",
+            "Hover over a card image for a larger preview.",
+            "Use Copy as text or Download .txt to export for other apps or paper play.",
+            "Delete this deck with the Delete deck button if you no longer need it.",
+          ]}
+          className="mb-8"
+        />
         <DeckView
           deckId={deck.id}
           commanderName={deck.commanderName}

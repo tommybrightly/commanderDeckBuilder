@@ -66,7 +66,7 @@ export function DeckView({ deckId, commanderName, data, legalityEnforced }: Deck
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">
+      <h1 className="text-2xl font-bold tracking-tight text-[var(--foreground)]">
         {commanderName}
       </h1>
       {!legalityEnforced && (
@@ -79,7 +79,7 @@ export function DeckView({ deckId, commanderName, data, legalityEnforced }: Deck
           This deck is {stats.shortBy} card{stats.shortBy === 1 ? "" : "s"} short of 99 (lands were capped at 40). Add more nonland cards and rebuild to fill the deck.
         </p>
       )}
-      <div className="mt-4 rounded-lg border border-zinc-200 bg-zinc-50/50 p-4 dark:border-zinc-700 dark:bg-zinc-900/50">
+      <div className="card mt-4 bg-[var(--background)]/50 p-4">
         <DeckStats
           main={main}
           lands={lands}
@@ -92,14 +92,14 @@ export function DeckView({ deckId, commanderName, data, legalityEnforced }: Deck
         <button
           type="button"
           onClick={copyAsText}
-          className="rounded border border-zinc-300 bg-white px-3 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-900"
+          className="btn-secondary text-sm"
         >
           Copy as text
         </button>
         <button
           type="button"
           onClick={downloadTxt}
-          className="rounded border border-zinc-300 bg-white px-3 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-900"
+          className="btn-secondary text-sm"
         >
           Download .txt
         </button>
@@ -107,13 +107,13 @@ export function DeckView({ deckId, commanderName, data, legalityEnforced }: Deck
           type="button"
           onClick={handleDelete}
           disabled={deleting}
-          className="ml-auto rounded border border-red-200 bg-white px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 dark:border-red-900 dark:bg-zinc-900 dark:text-red-400 dark:hover:bg-red-950/50 disabled:opacity-50"
+          className="btn-secondary ml-auto border-red-200 text-sm text-red-600 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/50 disabled:opacity-50"
         >
           {deleting ? "Deleting…" : "Delete deck"}
         </button>
       </div>
       <section className="mt-6" aria-label="Deck list by type">
-        <h2 className="mb-4 text-xl font-semibold text-zinc-900 dark:text-zinc-100">
+        <h2 className="mb-4 text-xl font-semibold text-[var(--foreground)]">
           Deck list
         </h2>
         <DeckListByType main={main} lands={lands} showRole />

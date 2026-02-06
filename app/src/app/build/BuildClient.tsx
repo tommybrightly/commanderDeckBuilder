@@ -134,7 +134,7 @@ export function BuildClient() {
   if (result) {
     return (
       <div className="mt-6">
-        <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
+        <h2 className="text-xl font-semibold text-[var(--foreground)]">
           Deck built
         </h2>
         {!result.deck.legalityEnforced && (
@@ -148,23 +148,16 @@ export function BuildClient() {
           </p>
         )}
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          <a
-            href={`/decks/${result.deckId}`}
-            className="rounded bg-zinc-900 px-4 py-2 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
-          >
+          <a href={`/decks/${result.deckId}`} className="btn-primary inline-block">
             View saved deck
           </a>
-          <button
-            type="button"
-            onClick={() => setResult(null)}
-            className="rounded border border-zinc-300 px-4 py-2 dark:border-zinc-600"
-          >
+          <button type="button" onClick={() => setResult(null)} className="btn-secondary">
             Build another
           </button>
         </div>
-        <div className="mt-6 rounded border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900">
-          <p className="font-medium">Commander: {result.deck.commander.name}</p>
-          <div className="mt-4 rounded-lg border border-zinc-200 bg-zinc-50/50 p-4 dark:border-zinc-700 dark:bg-zinc-900/50">
+        <div className="card mt-6 p-4">
+          <p className="font-medium text-[var(--foreground)]">Commander: {result.deck.commander.name}</p>
+          <div className="card mt-4 bg-[var(--background)]/50 p-4">
             <DeckStats
               main={result.deck.main}
               lands={result.deck.lands}
@@ -194,23 +187,23 @@ export function BuildClient() {
   };
 
   return (
-    <div className="mt-6 max-w-xl space-y-6">
+    <div className="card mt-6 max-w-xl space-y-6 p-6">
       <div>
-        <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+        <label className="block text-sm font-medium text-[var(--foreground)]">
           Your bulk / collection
         </label>
         <div className="mt-2 flex gap-2">
           <button
             type="button"
             onClick={() => setSource("saved")}
-            className={`rounded px-3 py-1.5 text-sm ${source === "saved" ? "bg-zinc-200 dark:bg-zinc-700" : "bg-zinc-100 dark:bg-zinc-800"}`}
+            className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${source === "saved" ? "bg-[var(--accent)] text-white" : "btn-secondary"}`}
           >
             Saved collection
           </button>
           <button
             type="button"
             onClick={() => setSource("bulk")}
-            className={`rounded px-3 py-1.5 text-sm ${source === "bulk" ? "bg-zinc-200 dark:bg-zinc-700" : "bg-zinc-100 dark:bg-zinc-800"}`}
+            className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${source === "bulk" ? "bg-[var(--accent)] text-white" : "btn-secondary"}`}
           >
             Paste or upload
           </button>
@@ -219,7 +212,7 @@ export function BuildClient() {
           <select
             value={collectionId}
             onChange={(e) => setCollectionId(e.target.value)}
-            className="mt-2 w-full rounded border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-900"
+            className="mt-2 w-full rounded-lg border border-[var(--card-border)] bg-[var(--card)] px-3 py-2 text-[var(--foreground)] focus:border-[var(--accent)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
           >
             <option value="">Select a collection</option>
             {collections.map((c) => (
@@ -234,18 +227,18 @@ export function BuildClient() {
               <button
                 type="button"
                 onClick={() => setInputFormat("text")}
-                className={`rounded px-3 py-1.5 text-sm ${inputFormat === "text" ? "bg-zinc-200 dark:bg-zinc-700" : "bg-zinc-100 dark:bg-zinc-800"}`}
+                className={`rounded-lg px-3 py-1.5 text-sm font-medium ${inputFormat === "text" ? "bg-[var(--accent)] text-white" : "btn-secondary"}`}
               >
                 Text
               </button>
               <button
                 type="button"
                 onClick={() => setInputFormat("csv")}
-                className={`rounded px-3 py-1.5 text-sm ${inputFormat === "csv" ? "bg-zinc-200 dark:bg-zinc-700" : "bg-zinc-100 dark:bg-zinc-800"}`}
+                className={`rounded-lg px-3 py-1.5 text-sm font-medium ${inputFormat === "csv" ? "bg-[var(--accent)] text-white" : "btn-secondary"}`}
               >
                 CSV
               </button>
-              <label className="cursor-pointer rounded border border-zinc-300 bg-white px-3 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-900">
+              <label className="btn-secondary cursor-pointer inline-block text-sm">
                 Upload file
                 <input
                   type="file"
@@ -260,13 +253,13 @@ export function BuildClient() {
               onChange={(e) => setRawInput(e.target.value)}
               placeholder={inputFormat === "csv" ? "Paste CSV or use Upload file" : "3 Lightning Bolt\n1 Sol Ring (C14)\nBack for More (OTP) 36"}
               rows={6}
-              className="w-full rounded border border-zinc-300 bg-white px-3 py-2 font-mono text-sm dark:border-zinc-600 dark:bg-zinc-900"
+              className="mt-2 w-full rounded-lg border border-[var(--card-border)] bg-[var(--card)] px-3 py-2 font-mono text-sm text-[var(--foreground)] placeholder:text-[var(--muted)] focus:border-[var(--accent)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
             />
           </div>
         )}
       </div>
       <div>
-        <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+        <label className="block text-sm font-medium text-[var(--foreground)]">
           Commander
         </label>
         <div className="mt-1">
@@ -274,17 +267,17 @@ export function BuildClient() {
         </div>
       </div>
       <div>
-        <span className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+        <span className="block text-sm font-medium text-[var(--foreground)]">
           Deck style
         </span>
-        <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+        <p className="mt-0.5 text-xs text-[var(--muted)]">
           Adjusts creature counts, spell caps, and what the builder prioritizes.
         </p>
         <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2">
           {ARCHETYPES.map(({ value, label, hint }) => (
             <label
               key={value}
-              className="flex cursor-pointer items-start gap-2 rounded border border-zinc-200 px-3 py-2 has-[:checked]:border-zinc-900 has-[:checked]:bg-zinc-100 dark:border-zinc-600 dark:has-[:checked]:border-zinc-100 dark:has-[:checked]:bg-zinc-800"
+              className="card flex cursor-pointer items-start gap-2 px-3 py-2 transition has-[:checked]:border-[var(--accent)] has-[:checked]:ring-1 has-[:checked]:ring-[var(--accent)]"
             >
               <input
                 type="radio"
@@ -295,8 +288,8 @@ export function BuildClient() {
                 className="mt-0.5 rounded border-zinc-300"
               />
               <span className="text-sm">
-                <span className="font-medium text-zinc-800 dark:text-zinc-200">{label}</span>
-                <span className="ml-1 text-zinc-500 dark:text-zinc-400">— {hint}</span>
+                <span className="font-medium text-[var(--foreground)]">{label}</span>
+                <span className="ml-1 text-[var(--muted)]">— {hint}</span>
               </span>
             </label>
           ))}
@@ -308,9 +301,9 @@ export function BuildClient() {
           id="legality"
           checked={enforceLegality}
           onChange={(e) => setEnforceLegality(e.target.checked)}
-          className="rounded border-zinc-300"
+          className="rounded border-[var(--card-border)] text-[var(--accent)] focus:ring-[var(--accent)]"
         />
-        <label htmlFor="legality" className="text-sm text-zinc-700 dark:text-zinc-300">
+        <label htmlFor="legality" className="text-sm text-[var(--foreground)]">
           Enforce Commander legality / banlist (turn off for casual play)
         </label>
       </div>
@@ -319,13 +312,13 @@ export function BuildClient() {
       )}
       {building && (
         <div className="space-y-2">
-          <div className="flex justify-between text-sm text-zinc-600 dark:text-zinc-400">
+          <div className="flex justify-between text-sm text-[var(--muted)]">
             <span>{progressMessage}</span>
             <span>{Math.round(progress * 100)}%</span>
           </div>
-          <div className="h-3 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
+          <div className="h-2 w-full overflow-hidden rounded-full bg-[var(--card-border)]">
             <div
-              className="h-full rounded-full bg-zinc-900 transition-[width] duration-300 ease-out dark:bg-zinc-100"
+              className="h-full rounded-full bg-[var(--accent)] transition-[width] duration-300 ease-out"
               style={{ width: `${Math.min(100, progress * 100)}%` }}
             />
           </div>
@@ -335,7 +328,7 @@ export function BuildClient() {
         type="button"
         onClick={build}
         disabled={building}
-        className="rounded bg-zinc-900 px-4 py-2 font-medium text-white disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
+        className="btn-primary mt-2"
       >
         {building ? "Building…" : "Build deck"}
       </button>

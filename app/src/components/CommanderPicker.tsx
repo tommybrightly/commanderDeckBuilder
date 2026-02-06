@@ -67,7 +67,7 @@ export function CommanderPicker({
           onChange={handleInputChange}
           onFocus={() => results.length > 0 && setOpen(true)}
           placeholder={placeholder}
-          className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-zinc-900 placeholder-zinc-500 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder-zinc-400"
+          className="w-full rounded-lg border border-[var(--card-border)] bg-[var(--card)] px-3 py-2 text-[var(--foreground)] placeholder:text-[var(--muted)] focus:border-[var(--accent)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
         />
         {value && (
           <button
@@ -76,23 +76,23 @@ export function CommanderPicker({
               onChange(null);
               setQuery("");
             }}
-            className="rounded border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-600"
+            className="btn-secondary text-sm"
           >
             Clear
           </button>
         )}
       </div>
       {loading && (
-        <p className="mt-1 text-sm text-zinc-500">Searching…</p>
+        <p className="mt-1 text-sm text-[var(--muted)]">Searching…</p>
       )}
       {open && results.length > 0 && (
-        <ul className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-md border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+        <ul className="card absolute z-10 mt-1 max-h-60 w-full overflow-auto shadow-lg">
           {results.map((c) => (
             <li key={c.id}>
               <button
                 type="button"
                 onClick={() => select(c)}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-[var(--foreground)] transition hover:bg-black/5 dark:hover:bg-white/5"
               >
                 {c.imageUrl && (
                   <img

@@ -38,13 +38,13 @@ export function DecksClient() {
   };
 
   if (loading) {
-    return <p className="mt-4 text-zinc-500">Loading…</p>;
+    return <p className="mt-4 text-[var(--muted)]">Loading…</p>;
   }
   if (list.length === 0) {
     return (
-      <p className="mt-4 text-zinc-500">
+      <p className="mt-4 text-[var(--muted)]">
         No decks yet. Build one from{" "}
-        <Link href="/build" className="underline">Build</Link>.
+        <Link href="/build" className="text-[var(--accent)] underline hover:no-underline">Build</Link>.
       </p>
     );
   }
@@ -54,19 +54,19 @@ export function DecksClient() {
       {list.map((d) => (
         <li
           key={d.id}
-          className="flex items-center justify-between gap-2 rounded border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900"
+          className="card flex items-center justify-between gap-2 transition hover:border-[var(--accent)]/40"
         >
           <Link
             href={`/decks/${d.id}`}
-            className="min-w-0 flex-1 px-4 py-3 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+            className="min-w-0 flex-1 px-4 py-3 transition hover:opacity-90"
           >
-            <span className="font-medium">{d.commanderName}</span>
+            <span className="font-medium text-[var(--foreground)]">{d.commanderName}</span>
             {!d.legalityEnforced && (
               <span className="ml-2 text-xs text-amber-600 dark:text-amber-400">
                 (casual)
               </span>
             )}
-            <span className="ml-2 text-sm text-zinc-500">
+            <span className="ml-2 text-sm text-[var(--muted)]">
               — {new Date(d.updatedAt).toLocaleDateString()}
             </span>
           </Link>

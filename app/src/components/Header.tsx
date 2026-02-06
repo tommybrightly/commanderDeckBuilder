@@ -3,36 +3,40 @@ import { AuthButton } from "./AuthButton";
 
 export function Header() {
   return (
-    <header className="border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+    <header className="sticky top-0 z-50 border-b border-[var(--card-border)] bg-[var(--card)]/95 backdrop-blur-sm">
       <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
-        <Link href="/" className="font-semibold text-zinc-900 dark:text-zinc-100">
+        <Link
+          href="/"
+          className="font-semibold text-[var(--foreground)] transition opacity-90 hover:opacity-100"
+        >
           Commander Deck Builder
         </Link>
-        <nav className="flex items-center gap-6">
+        <nav className="flex items-center gap-1">
           <Link
             href="/collections"
-            className="text-sm text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+            className="rounded-md px-3 py-2 text-sm font-medium text-[var(--muted)] transition hover:bg-black/5 hover:text-[var(--foreground)] dark:hover:bg-white/5"
           >
             Collections
           </Link>
           <Link
             href="/build"
-            className="text-sm text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+            className="rounded-md px-3 py-2 text-sm font-medium text-[var(--muted)] transition hover:bg-black/5 hover:text-[var(--foreground)] dark:hover:bg-white/5"
           >
             Build
           </Link>
           <Link
             href="/decks"
-            className="text-sm text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+            className="rounded-md px-3 py-2 text-sm font-medium text-[var(--muted)] transition hover:bg-black/5 hover:text-[var(--foreground)] dark:hover:bg-white/5"
           >
             My Decks
           </Link>
           <Link
             href="/settings"
-            className="text-sm text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+            className="rounded-md px-3 py-2 text-sm font-medium text-[var(--muted)] transition hover:bg-black/5 hover:text-[var(--foreground)] dark:hover:bg-white/5"
           >
             Settings
           </Link>
+          <span className="ml-2 h-6 w-px bg-[var(--card-border)]" aria-hidden />
           <AuthButton />
         </nav>
       </div>

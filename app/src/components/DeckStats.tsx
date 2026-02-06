@@ -111,13 +111,13 @@ export function DeckStats({ main, lands, totalNonlands, totalLands, compact, str
   return (
     <div className={compact ? "space-y-3" : "space-y-4"}>
       <section>
-        <h3 className={compact ? "text-sm font-medium text-zinc-700 dark:text-zinc-300" : "text-base font-semibold text-zinc-800 dark:text-zinc-200"}>
+        <h3 className={compact ? "text-sm font-medium text-[var(--muted)]" : "text-base font-semibold text-[var(--foreground)]"}>
           Card types
         </h3>
-        <div className={`mt-1 flex flex-wrap gap-x-4 gap-y-0.5 ${compact ? "text-sm" : "text-sm"}`}>
+        <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-sm">
           {CARD_TYPES.filter((t) => byType[t] > 0).map((t) => (
-            <span key={t} className="text-zinc-600 dark:text-zinc-400">
-              {t}: <span className="font-medium text-zinc-900 dark:text-zinc-100">{byType[t]}</span>
+            <span key={t} className="text-[var(--muted)]">
+              {t}: <span className="font-medium text-[var(--foreground)]">{byType[t]}</span>
             </span>
           ))}
         </div>
@@ -125,7 +125,7 @@ export function DeckStats({ main, lands, totalNonlands, totalLands, compact, str
 
       {curve.some((b) => b.count > 0) && (
         <section>
-          <h3 className={compact ? "text-sm font-medium text-zinc-700 dark:text-zinc-300" : "text-base font-semibold text-zinc-800 dark:text-zinc-200"}>
+          <h3 className={compact ? "text-sm font-medium text-[var(--muted)]" : "text-base font-semibold text-[var(--foreground)]"}>
             Mana curve (nonlands)
           </h3>
           <div className="mt-2 flex items-end gap-0.5">
@@ -137,18 +137,18 @@ export function DeckStats({ main, lands, totalNonlands, totalLands, compact, str
                 title={`CMC ${b.cmc === 7 ? "7+" : b.cmc}: ${b.count} cards`}
               >
                 <div
-                  className="w-full min-h-[0.25rem] rounded-t bg-zinc-700 dark:bg-zinc-500 transition-all"
+                  className="w-full min-h-[0.25rem] rounded-t bg-[var(--accent)] transition-all"
                   style={{ height: `${maxCurve > 0 ? (b.count / maxCurve) * 4 : 0}rem` }}
                 />
-                <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                <span className="text-xs text-[var(--muted)]">
                   {b.cmc === 7 ? "7+" : b.cmc}
                 </span>
               </div>
             ))}
           </div>
           {avgCmc != null && (
-            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-              Average CMC: <span className="font-medium text-zinc-700 dark:text-zinc-300">{avgCmc}</span>
+            <p className="mt-1 text-xs text-[var(--muted)]">
+              Average CMC: <span className="font-medium text-[var(--foreground)]">{avgCmc}</span>
             </p>
           )}
         </section>
@@ -156,17 +156,17 @@ export function DeckStats({ main, lands, totalNonlands, totalLands, compact, str
 
       {strategyExplanation && (
         <section>
-          <h3 className={compact ? "text-sm font-medium text-zinc-700 dark:text-zinc-300" : "text-base font-semibold text-zinc-800 dark:text-zinc-200"}>
+          <h3 className={compact ? "text-sm font-medium text-[var(--muted)]" : "text-base font-semibold text-[var(--foreground)]"}>
             How to play this deck
           </h3>
-          <div className="mt-1 rounded border border-zinc-200 bg-zinc-50/80 px-3 py-2 dark:border-zinc-600 dark:bg-zinc-800/50">
-            <p className="text-sm text-zinc-700 dark:text-zinc-300">{strategyExplanation}</p>
+          <div className="card mt-1 bg-[var(--background)]/80 px-3 py-2">
+            <p className="text-sm text-[var(--foreground)]">{strategyExplanation}</p>
           </div>
         </section>
       )}
 
       {(totalNonlands != null || totalLands != null) && (
-        <p className={compact ? "text-sm text-zinc-500 dark:text-zinc-400" : "text-sm text-zinc-600 dark:text-zinc-400"}>
+        <p className="text-sm text-[var(--muted)]">
           {totalNonlands != null && totalLands != null
             ? `${totalNonlands} nonlands, ${totalLands} lands`
             : totalNonlands != null
@@ -313,16 +313,16 @@ export function DeckListByType({ main, lands, showRole = true, compact }: DeckLi
           const cards = byType[type];
           const isEmpty = cards.length === 0;
           return (
-            <section key={type} className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900">
-              <h3 className="text-lg font-semibold text-zinc-800 dark:text-zinc-200">
+            <section key={type} className="card p-4">
+              <h3 className="text-lg font-semibold text-[var(--foreground)]">
                 {sectionLabel(type)} ({cards.length})
               </h3>
               {isEmpty ? (
-                <p className="mt-2 rounded bg-zinc-50/80 px-3 py-4 text-sm italic text-zinc-500 dark:bg-zinc-800/50 dark:text-zinc-400">
+                <p className="mt-2 rounded bg-[var(--background)]/80 px-3 py-4 text-sm italic text-[var(--muted)]">
                   {emptySlotMessage}
                 </p>
               ) : (
-                <ul className={`mt-2 overflow-auto rounded bg-zinc-50/80 p-3 dark:bg-zinc-800/50 ${maxHeight}`}>
+                <ul className={`mt-2 overflow-auto rounded bg-[var(--background)]/80 p-3 ${maxHeight}`}>
                   {cards.map((c, i) => (
                     <li key={`${c.name}-${i}`} className="flex items-center gap-3 py-1.5 text-sm">
                       {c.imageUrl ? (
@@ -354,11 +354,11 @@ export function DeckListByType({ main, lands, showRole = true, compact }: DeckLi
             </section>
           );
         })}
-        <section className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900">
-          <h3 className="text-lg font-semibold text-zinc-800 dark:text-zinc-200">
+        <section className="card p-4">
+          <h3 className="text-lg font-semibold text-[var(--foreground)]">
             Lands ({totalLandCards})
           </h3>
-          <ul className={`mt-2 overflow-auto rounded bg-zinc-50/80 p-3 dark:bg-zinc-800/50 ${maxHeight}`}>
+          <ul className={`mt-2 overflow-auto rounded bg-[var(--background)]/80 p-3 ${maxHeight}`}>
             {groupedLands.map((c) => (
               <li key={c.name} className="flex items-center gap-3 py-1.5 text-sm">
                 {c.imageUrl ? (
