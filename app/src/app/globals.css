@@ -1,14 +1,26 @@
 @import "tailwindcss";
 
+/* Mystical Magic vibe — arcane, rich, not sterile */
 :root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
-  --card: #ffffff;
-  --card-border: #e2e8f0;
-  --muted: #64748b;
-  --accent: #4f46e5;
-  --accent-hover: #4338ca;
+  --background: #1c1926;
+  --foreground: #e8e4f0;
+  --card: #252235;
+  --card-border: #3d3852;
+  --muted: #9d96b0;
+  --accent: #c9a227;
+  --accent-hover: #e0b83d;
+  --glow: rgba(201, 162, 39, 0.15);
+  --arcane: rgba(139, 92, 246, 0.12);
   --radius: 0.75rem;
+  /* Nav — mana-inspired accents */
+  --nav-collections: rgba(96, 165, 250, 0.2);
+  --nav-collections-text: #93c5fd;
+  --nav-build: rgba(251, 191, 36, 0.2);
+  --nav-build-text: #fcd34d;
+  --nav-decks: rgba(167, 139, 250, 0.2);
+  --nav-decks-text: #c4b5fd;
+  --nav-settings: rgba(156, 163, 175, 0.2);
+  --nav-settings-text: #d1d5db;
 }
 
 @theme inline {
@@ -18,18 +30,6 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0f172a;
-    --foreground: #f1f5f9;
-    --card: #1e293b;
-    --card-border: #334155;
-    --muted: #94a3b8;
-    --accent: #6366f1;
-    --accent-hover: #818cf8;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
@@ -37,56 +37,49 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Subtle gradient background */
+/* Arcane atmosphere — violet and gold, like mana and power */
 body::before {
   content: "";
   position: fixed;
   inset: 0;
-  background: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(79, 70, 229, 0.08), transparent),
-    radial-gradient(ellipse 60% 40% at 100% 0%, rgba(99, 102, 241, 0.05), transparent);
+  background:
+    radial-gradient(ellipse 100% 70% at 50% -20%, var(--arcane), transparent 50%),
+    radial-gradient(ellipse 80% 50% at 80% 20%, var(--glow), transparent 45%),
+    radial-gradient(ellipse 60% 60% at 10% 90%, rgba(99, 102, 241, 0.06), transparent 40%);
   pointer-events: none;
   z-index: 0;
 }
 
-@media (prefers-color-scheme: dark) {
-  body::before {
-    background: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(99, 102, 241, 0.12), transparent),
-      radial-gradient(ellipse 60% 40% at 100% 0%, rgba(79, 70, 229, 0.06), transparent);
-  }
-}
-
-/* Card-style panels */
+/* Card-style panels — subtle inner glow, like enchanted surfaces */
 .card {
   background: var(--card);
   border: 1px solid var(--card-border);
   border-radius: var(--radius);
-  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.05), 0 1px 2px -1px rgb(0 0 0 / 0.05);
+  box-shadow:
+    0 1px 3px 0 rgb(0 0 0 / 0.2),
+    0 0 0 1px rgba(201, 162, 39, 0.04) inset;
 }
 
-@media (prefers-color-scheme: dark) {
-  .card {
-    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.2);
-  }
-}
-
-/* Primary button */
+/* Primary button — gold, legendary feel */
 .btn-primary {
-  background: var(--accent);
-  color: white;
-  font-weight: 500;
+  background: linear-gradient(180deg, #d4af37 0%, #b8960c 100%);
+  color: #1a1612;
+  font-weight: 600;
   padding: 0.5rem 1rem;
   border-radius: var(--radius);
-  transition: background 0.15s, transform 0.1s;
+  box-shadow: 0 2px 8px rgba(201, 162, 39, 0.3);
+  transition: filter 0.15s, box-shadow 0.15s;
 }
 .btn-primary:hover:not(:disabled) {
-  background: var(--accent-hover);
+  filter: brightness(1.1);
+  box-shadow: 0 4px 12px rgba(201, 162, 39, 0.4);
 }
 .btn-primary:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
-/* Secondary / outline button */
+/* Secondary — outlined, touches of gold on hover */
 .btn-secondary {
   background: transparent;
   color: var(--foreground);
@@ -94,14 +87,40 @@ body::before {
   font-weight: 500;
   padding: 0.5rem 1rem;
   border-radius: var(--radius);
-  transition: background 0.15s, border-color 0.15s;
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
 }
 .btn-secondary:hover:not(:disabled) {
-  background: rgba(0, 0, 0, 0.04);
-  border-color: var(--muted);
+  background: rgba(201, 162, 39, 0.06);
+  border-color: rgba(201, 162, 39, 0.35);
+  box-shadow: 0 0 20px rgba(201, 162, 39, 0.08);
 }
-@media (prefers-color-scheme: dark) {
-  .btn-secondary:hover:not(:disabled) {
-    background: rgba(255, 255, 255, 0.06);
-  }
+
+/* Nav link colors — plain CSS so hover always works */
+.nav-link {
+  display: inline-block;
+  border-radius: 0.375rem;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--muted);
+  transition: background 0.15s, color 0.15s;
+}
+.nav-link:hover {
+  color: var(--foreground);
+}
+nav a.nav-link-collections:hover {
+  background: rgba(96, 165, 250, 0.28);
+  color: #93c5fd;
+}
+nav a.nav-link-build:hover {
+  background: rgba(251, 191, 36, 0.28);
+  color: #fcd34d;
+}
+nav a.nav-link-decks:hover {
+  background: rgba(167, 139, 250, 0.28);
+  color: #c4b5fd;
+}
+nav a.nav-link-settings:hover {
+  background: rgba(156, 163, 175, 0.22);
+  color: #e5e7eb;
 }

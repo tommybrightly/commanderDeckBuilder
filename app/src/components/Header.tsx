@@ -11,29 +11,17 @@ export function Header() {
         >
           Commander Deck Builder
         </Link>
-        <nav className="flex items-center gap-1">
-          <Link
-            href="/collections"
-            className="rounded-md px-3 py-2 text-sm font-medium text-[var(--muted)] transition hover:bg-black/5 hover:text-[var(--foreground)] dark:hover:bg-white/5"
-          >
+        <nav className="flex items-center gap-2">
+          <Link href="/collections" className="nav-link nav-link-collections">
             Collections
           </Link>
-          <Link
-            href="/build"
-            className="rounded-md px-3 py-2 text-sm font-medium text-[var(--muted)] transition hover:bg-black/5 hover:text-[var(--foreground)] dark:hover:bg-white/5"
-          >
+          <Link href="/build" className="nav-link nav-link-build">
             Build
           </Link>
-          <Link
-            href="/decks"
-            className="rounded-md px-3 py-2 text-sm font-medium text-[var(--muted)] transition hover:bg-black/5 hover:text-[var(--foreground)] dark:hover:bg-white/5"
-          >
+          <Link href="/decks" className="nav-link nav-link-decks">
             My Decks
           </Link>
-          <Link
-            href="/settings"
-            className="rounded-md px-3 py-2 text-sm font-medium text-[var(--muted)] transition hover:bg-black/5 hover:text-[var(--foreground)] dark:hover:bg-white/5"
-          >
+          <Link href="/settings" className="nav-link nav-link-settings">
             Settings
           </Link>
           <span className="ml-2 h-6 w-px bg-[var(--card-border)]" aria-hidden />
