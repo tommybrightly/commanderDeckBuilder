@@ -24,10 +24,11 @@ type DeckCard = {
   typeLine?: string;
   role?: string;
   imageUrl?: string;
+  reason?: string;
 };
 
 export function groupMainByType(
-  main: Array<{ name: string; quantity?: number; typeLine?: string; role?: string; imageUrl?: string }>
+  main: Array<{ name: string; quantity?: number; typeLine?: string; role?: string; imageUrl?: string; reason?: string }>
 ): Record<string, DeckCard[]> {
   const groups: Record<string, DeckCard[]> = {};
   for (const label of DISPLAY_TYPE_ORDER) groups[label] = [];
@@ -40,6 +41,7 @@ export function groupMainByType(
       typeLine: c.typeLine,
       role: c.role,
       imageUrl: c.imageUrl,
+      reason: c.reason,
     });
   }
   return groups;
