@@ -39,7 +39,7 @@ if (providers.length === 0) {
   );
 }
 
-export const authOptions: NextAuthOptions = {
+export const authOptions = {
   adapter: PrismaAdapter(prisma as Parameters<typeof PrismaAdapter>[0]),
   providers,
   session: { strategy: "database", maxAge: 30 * 24 * 60 * 60 },
@@ -53,10 +53,4 @@ export const authOptions: NextAuthOptions = {
       return session;
     },
   },
-  events: {
-    error({ message }) {
-      // Log auth errors so they appear in Railway (or local) logs
-      console.error("[NextAuth error]", message);
-    },
-  },
-};
+} as NextAuthOptions;
