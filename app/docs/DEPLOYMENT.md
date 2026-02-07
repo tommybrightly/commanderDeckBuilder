@@ -38,10 +38,21 @@ Railway gives you a Node app + persistent disk, so your SQLite database and sync
 
 ### 3. Add a volume (for SQLite)
 
-1. In your Railway project, click your service.
-2. Go to **Settings** or **Variables** and add a **Volume**.
-3. Mount it at a path like `/data` (Railway will show the path).
-4. Set `DATABASE_URL` to use that path, e.g. `file:/data/dev.db` (use the exact path Railway gives you).
+SQLite needs a **persistent disk** so the database file isn’t lost when Railway redeploys. Railway calls this a **Volume**.
+
+**Where to add it:** Volumes are not under Settings or Variables. Use one of these:
+
+- **Command Palette:** On the Railway project dashboard, press **Ctrl+K** (Windows/Linux) or **⌘K** (Mac), then type **“Volume”** or **“Create volume”** and choose the option to create a new volume.
+- **Right‑click:** Right‑click on the **project canvas** (the area where your service/box is drawn) and look for **“Add volume”** or **“Create volume”** in the menu.
+
+**Then:**
+
+1. When asked which service to attach the volume to, select your app service (the one that runs the Next.js app).
+2. Set the **mount path** to `/data` (or another path you prefer). This is the folder inside the container where the volume will appear.
+3. Create/save the volume. Railway will attach it to your service.
+4. In **Variables**, set `DATABASE_URL` to `file:/data/dev.db` (if you used `/data` as the mount path). Railway also sets `RAILWAY_VOLUME_MOUNT_PATH` automatically; you can use that path in `DATABASE_URL` if you prefer, e.g. `file:${RAILWAY_VOLUME_MOUNT_PATH}/dev.db`.
+
+**If you don’t see Volume options:** You may need to be on a paid plan (e.g. Hobby) for volumes; the free/trial tier has limits. Check [Railway’s pricing](https://railway.app/pricing) and [Volumes docs](https://docs.railway.app/guides/volumes).
 
 ### 4. Set environment variables
 
@@ -50,15 +61,25 @@ In Railway → your service → **Variables**, add:
 | Variable | Value |
 |----------|--------|
 | `DATABASE_URL` | `file:/data/dev.db` (or the path where your volume is mounted) |
-| `AUTH_SECRET` | Run `openssl rand -base64 32` locally and paste the result |
+| `AUTH_SECRET` | A random secret (generate once and paste the result — see below) |
 | `GOOGLE_CLIENT_ID` | Your Google OAuth client ID |
 | `GOOGLE_CLIENT_SECRET` | Your Google OAuth client secret |
 
-**Auth redirect URIs:** In [Google Cloud Console](https://console.cloud.google.com/) → your OAuth client → Authorized redirect URIs, add:
+**Generate `AUTH_SECRET`** (run one of these locally and paste the output):
 
-- `https://YOUR_RAILWAY_URL.up.railway.app/api/auth/callback/google`
+- **PowerShell (Windows):**  
+  `[Convert]::ToBase64String([System.Security.Cryptography.RandomNumberGenerator]::GetBytes(32))`
+- **Node.js** (if you have Node installed):  
+  `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`
+- **OpenSSL** (Mac/Linux or if installed on Windows):  
+  `openssl rand -base64 32`
 
-You’ll get `YOUR_RAILWAY_URL` from Railway after the first deploy (e.g. `commander-deck-builder-production.up.railway.app`).
+**Auth redirect URIs:** In [Google Cloud Console](https://console.cloud.google.com/) → your OAuth client → **Authorized redirect URIs**, add the **exact** URL where users open your app, plus `/api/auth/callback/google`:
+
+- If you use the Railway domain: `https://commanderdeckbuilder-production.up.railway.app/api/auth/callback/google` (replace with your actual Railway domain if different).
+- If you use a custom domain (e.g. GoDaddy): also add `https://www.commanderdeckbuilder.com/api/auth/callback/google` and/or `https://commanderdeckbuilder.com/api/auth/callback/google` so the URI matches the address in the browser.
+
+**Important:** The redirect URI must match the **address in the browser** when you click “Sign in.” If you get `redirect_uri_mismatch`, add the callback URL for the exact host you’re visiting (no trailing slash).
 
 Optional (for more sign-in options):
 

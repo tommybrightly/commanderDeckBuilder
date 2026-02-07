@@ -44,6 +44,7 @@ export const authOptions: NextAuthOptions = {
   providers,
   session: { strategy: "database", maxAge: 30 * 24 * 60 * 60 },
   pages: { signIn: "/" },
+  trustHost: true, // required when behind Railway/proxy so callback URL is accepted
   callbacks: {
     session({ session, user }) {
       if (session.user) {
