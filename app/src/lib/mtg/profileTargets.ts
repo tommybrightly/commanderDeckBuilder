@@ -80,13 +80,13 @@ const POWER_ADJUST: Record<
   },
 };
 
-function applyOverrides<T extends Record<string, number>>(
-  base: T,
-  overrides: Partial<T>
-): T {
+function applyOverrides(
+  base: ProfileTargets,
+  overrides: Partial<ProfileTargets>
+): ProfileTargets {
   const out = { ...base };
-  for (const k of Object.keys(overrides) as (keyof T)[]) {
-    if (overrides[k] != null) (out as Partial<T>)[k] = overrides[k] as T[keyof T];
+  for (const k of Object.keys(overrides) as (keyof ProfileTargets)[]) {
+    if (overrides[k] != null) (out as Partial<ProfileTargets>)[k] = overrides[k] as number;
   }
   return out;
 }
