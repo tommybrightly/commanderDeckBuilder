@@ -53,4 +53,10 @@ export const authOptions: NextAuthOptions = {
       return session;
     },
   },
+  events: {
+    error({ message }) {
+      // Log auth errors so they appear in Railway (or local) logs
+      console.error("[NextAuth error]", message);
+    },
+  },
 };
