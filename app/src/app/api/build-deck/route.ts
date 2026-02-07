@@ -7,7 +7,7 @@ import { parseTextList, parseCsv, detectInputFormat } from "@/lib/mtg/parseColle
 import { enrichCollection } from "@/lib/mtg/enrichCollection";
 import { dbCardToCardInfo, getCardsByNamesFromDb, getCardByNameFromDb } from "@/lib/mtg/cardDb";
 import { ensureCardDatabaseSynced } from "@/lib/mtg/syncCardDatabase";
-import type { CommanderChoice, DeckArchetype } from "@/lib/mtg/types";
+import type { CommanderChoice, DeckArchetype, MetaProfile, Playstyle } from "@/lib/mtg/types";
 import type { CardInfo } from "@/lib/mtg/types";
 
 export const maxDuration = 300;
@@ -29,6 +29,8 @@ export async function POST(req: Request) {
     commander,
     enforceLegality,
     archetype,
+    meta,
+    playstyle,
   } = body as {
     collectionId?: string;
     rawInput?: string;
@@ -36,6 +38,8 @@ export async function POST(req: Request) {
     commander: CommanderChoice;
     enforceLegality?: boolean;
     archetype?: DeckArchetype;
+    meta?: MetaProfile;
+    playstyle?: Playstyle;
   };
 
   if (!commander?.name) {
@@ -149,6 +153,13 @@ export async function POST(req: Request) {
 
         const enforceLegalityOption = enforceLegality ?? true;
         const archetypeOption = archetype ?? "balanced";
+        const builderOptions = {
+          enforceLegality: enforceLegalityOption,
+          archetype: archetypeOption,
+          power: "high_power",
+          meta: meta ?? "combat",
+          playstyle: playstyle ?? "balanced",
+        };
         const commanderInfo = cardInfos?.get(commander.name.toLowerCase()) ?? await getCardByNameFromDb(commander.name);
         if (!commanderInfo) {
           send({
@@ -197,7 +208,7 @@ export async function POST(req: Request) {
                 deckList = await buildDeck({
                   owned,
                   commander,
-                  options: { enforceLegality: enforceLegalityOption, archetype: archetypeOption },
+                  options: builderOptions,
                   onProgress: (stage, progress, message) => {
                     send({ type: "progress", stage, progress, message });
                   },
@@ -213,7 +224,7 @@ export async function POST(req: Request) {
           deckList = await buildDeck({
             owned,
             commander,
-            options: { enforceLegality: enforceLegalityOption, archetype: archetypeOption },
+            options: builderOptions,
             onProgress: (stage, progress, message) => {
               send({ type: "progress", stage, progress, message });
             },

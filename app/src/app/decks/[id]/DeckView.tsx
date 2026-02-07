@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { DeckStats, DeckListByType } from "@/components/DeckStats";
 
 interface DeckViewProps {
@@ -9,17 +9,31 @@ interface DeckViewProps {
   commanderName: string;
   data: {
     commander?: { name: string; imageUrl?: string };
-    main?: Array<{ name: string; quantity: number; role?: string; typeLine?: string; cmc?: number; imageUrl?: string }>;
-    lands?: Array<{ name: string; quantity: number; imageUrl?: string }>;
+    main?: Array<{ name: string; quantity: number; role?: string; typeLine?: string; cmc?: number; imageUrl?: string; reason?: string }>;
+    lands?: Array<{ name: string; quantity: number; imageUrl?: string; reason?: string }>;
     stats?: { totalNonlands: number; totalLands: number; byRole?: Record<string, number>; shortBy?: number; colorIdentity?: string[]; strategyExplanation?: string };
     legalityEnforced?: boolean;
   };
   legalityEnforced: boolean;
+  collectionId?: string;
 }
 
-export function DeckView({ deckId, commanderName, data, legalityEnforced }: DeckViewProps) {
+export function DeckView({ deckId, commanderName, data, legalityEnforced, collectionId }: DeckViewProps) {
   const router = useRouter();
   const [deleting, setDeleting] = useState(false);
+  const [upgrades, setUpgrades] = useState<Array<{ name: string; impactScore: number; role?: string }>>([]);
+  const [upgradesLoading, setUpgradesLoading] = useState(false);
+
+  useEffect(() => {
+    if (!collectionId || !deckId) return;
+    setUpgradesLoading(true);
+    fetch(`/api/decks/${deckId}/upgrade-suggestions?limit=10`)
+      .then((r) => r.json())
+      .then((body) => {
+        if (Array.isArray(body.suggestions)) setUpgrades(body.suggestions);
+      })
+      .finally(() => setUpgradesLoading(false));
+  }, [deckId, collectionId]);
   const main = data?.main ?? [];
   const lands = data?.lands ?? [];
   const stats = data?.stats;
@@ -29,8 +43,8 @@ export function DeckView({ deckId, commanderName, data, legalityEnforced }: Deck
       `Commander\n1 ${commanderName}`,
       "",
       "Deck",
-      ...main.map((c) => `${c.quantity} ${c.name}`),
-      ...lands.map((c) => `${c.quantity} ${c.name}`),
+      ...main.map((c) => (c as { reason?: string }).reason ? `${c.quantity} ${c.name}  # ${(c as { reason?: string }).reason}` : `${c.quantity} ${c.name}`),
+      ...lands.map((c) => (c as { reason?: string }).reason ? `${c.quantity} ${c.name}  # ${(c as { reason?: string }).reason}` : `${c.quantity} ${c.name}`),
     ];
     void navigator.clipboard.writeText(lines.join("\n"));
   };
@@ -40,8 +54,8 @@ export function DeckView({ deckId, commanderName, data, legalityEnforced }: Deck
       `Commander\n1 ${commanderName}`,
       "",
       "Deck",
-      ...main.map((c) => `${c.quantity} ${c.name}`),
-      ...lands.map((c) => `${c.quantity} ${c.name}`),
+      ...main.map((c) => (c as { reason?: string }).reason ? `${c.quantity} ${c.name}  # ${(c as { reason?: string }).reason}` : `${c.quantity} ${c.name}`),
+      ...lands.map((c) => (c as { reason?: string }).reason ? `${c.quantity} ${c.name}  # ${(c as { reason?: string }).reason}` : `${c.quantity} ${c.name}`),
     ];
     const blob = new Blob([lines.join("\n")], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
@@ -116,8 +130,33 @@ export function DeckView({ deckId, commanderName, data, legalityEnforced }: Deck
         <h2 className="mb-4 text-xl font-semibold text-[var(--foreground)]">
           Deck list
         </h2>
-        <DeckListByType main={main} lands={lands} showRole />
+        <DeckListByType main={main} lands={lands} showRole showReason />
       </section>
+      {collectionId && (
+        <section className="mt-6" aria-label="Upgrade suggestions">
+          <h2 className="mb-2 text-xl font-semibold text-[var(--foreground)]">
+            Upgrade path
+          </h2>
+          <p className="mb-3 text-sm text-[var(--muted)]">
+            Top cards from this collection not in the deck, ranked by impact if you added them.
+          </p>
+          {upgradesLoading ? (
+            <p className="text-sm text-[var(--muted)]">Loading…</p>
+          ) : upgrades.length > 0 ? (
+            <ul className="card list-inside list-disc space-y-1 p-4 text-sm">
+              {upgrades.map((u) => (
+                <li key={u.name}>
+                  <span className="font-medium text-[var(--foreground)]">{u.name}</span>
+                  {u.role && <span className="text-[var(--muted)]"> — {u.role}</span>}
+                  <span className="text-[var(--muted)]"> (impact {u.impactScore.toFixed(2)})</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-[var(--muted)]">No suggestions or deck was built from a pasted list.</p>
+          )}
+        </section>
+      )}
     </div>
   );
 }

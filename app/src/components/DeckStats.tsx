@@ -181,9 +181,10 @@ export function DeckStats({ main, lands, totalNonlands, totalLands, compact, str
 }
 
 interface DeckListByTypeProps {
-  main: Array<{ name: string; quantity?: number; typeLine?: string; role?: string; imageUrl?: string }>;
-  lands: Array<{ name: string; quantity?: number; imageUrl?: string }>;
+  main: Array<{ name: string; quantity?: number; typeLine?: string; role?: string; imageUrl?: string; reason?: string }>;
+  lands: Array<{ name: string; quantity?: number; imageUrl?: string; reason?: string }>;
   showRole?: boolean;
+  showReason?: boolean;
   compact?: boolean;
 }
 
@@ -244,7 +245,7 @@ function CardHoverPreview({
   );
 }
 
-export function DeckListByType({ main, lands, showRole = true, compact }: DeckListByTypeProps) {
+export function DeckListByType({ main, lands, showRole = true, showReason = false, compact }: DeckListByTypeProps) {
   const [hovered, setHovered] = useState<{ name: string; imageUrl: string; left: number; top: number } | null>(null);
   const hideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -290,18 +291,20 @@ export function DeckListByType({ main, lands, showRole = true, compact }: DeckLi
 
   // Group lands by name so we show "10x Swamp" instead of ten "1x Swamp" lines
   const groupedLands = (() => {
-    const byName = new Map<string, { quantity: number; imageUrl?: string }>();
+    const byName = new Map<string, { quantity: number; imageUrl?: string; reason?: string }>();
     for (const c of lands) {
       const key = c.name;
       const existing = byName.get(key);
       const qty = c.quantity ?? 1;
+      const reason = (c as { reason?: string }).reason;
       if (existing) {
         existing.quantity += qty;
+        if (reason && !existing.reason) existing.reason = reason;
       } else {
-        byName.set(key, { quantity: qty, imageUrl: c.imageUrl });
+        byName.set(key, { quantity: qty, imageUrl: c.imageUrl, reason });
       }
     }
-    return Array.from(byName.entries(), ([name, { quantity, imageUrl }]) => ({ name, quantity, imageUrl }));
+    return Array.from(byName.entries(), ([name, { quantity, imageUrl, reason }]) => ({ name, quantity, imageUrl, reason }));
   })();
   const totalLandCards = groupedLands.reduce((s, c) => s + c.quantity, 0);
 
@@ -346,9 +349,17 @@ export function DeckListByType({ main, lands, showRole = true, compact }: DeckLi
                       ) : (
                         <span className="h-16 w-[44px] shrink-0 rounded bg-zinc-300 dark:bg-zinc-600" aria-hidden />
                       )}
-                      <span>
+                      <span
+                        title={showReason && c.reason ? c.reason : undefined}
+                        className={showReason && c.reason ? "cursor-help border-b border-dotted border-[var(--muted)]" : ""}
+                      >
                         {c.quantity}x {c.name}
                         {showRole && c.role && <span className="text-zinc-500"> — {c.role}</span>}
+                        {showReason && c.reason && (
+                          <span className="ml-1 text-xs text-[var(--muted)]" title={c.reason}>
+                            (why?)
+                          </span>
+                        )}
                       </span>
                     </li>
                   ))}
@@ -382,7 +393,13 @@ export function DeckListByType({ main, lands, showRole = true, compact }: DeckLi
                 ) : (
                   <span className="h-16 w-[44px] shrink-0 rounded bg-zinc-300 dark:bg-zinc-600" aria-hidden />
                 )}
-                <span>{c.quantity}x {c.name}</span>
+                <span
+                  title={showReason && (c as { reason?: string }).reason ? (c as { reason?: string }).reason : undefined}
+                  className={showReason && (c as { reason?: string }).reason ? "cursor-help border-b border-dotted border-[var(--muted)]" : ""}
+                >
+                  {c.quantity}x {c.name}
+                  {showReason && (c as { reason?: string }).reason && <span className="ml-1 text-xs text-[var(--muted)]">(why?)</span>}
+                </span>
               </li>
             ))}
           </ul>

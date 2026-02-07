@@ -135,7 +135,7 @@ export function BuildClient() {
     return (
       <div className="mt-6">
         <h2 className="text-xl font-semibold text-[var(--foreground)]">
-          Deck built
+          Deck built from your collection
         </h2>
         {!result.deck.legalityEnforced && (
           <p className="mt-1 text-sm text-amber-600 dark:text-amber-400">
@@ -188,6 +188,9 @@ export function BuildClient() {
 
   return (
     <div className="card mt-6 max-w-xl space-y-6 p-6">
+      <p className="text-sm text-[var(--muted)]">
+        Build the best deck from what you own — we only use cards in your collection.
+      </p>
       <div>
         <label className="block text-sm font-medium text-[var(--foreground)]">
           Your bulk / collection

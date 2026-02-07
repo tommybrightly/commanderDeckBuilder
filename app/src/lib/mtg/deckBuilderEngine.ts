@@ -6,11 +6,31 @@ import type {
   CommanderChoice,
   DeckList,
   OwnedCard,
+  RoleFamily,
 } from "./types";
 import { getCardsByNamesFromDb, getCardByNameFromDb } from "./cardDb";
 import type { CommanderThemeId } from "./commanderThemes";
 import { getCommanderThemes, commanderSynergyScore } from "./commanderThemes";
 import { getCommanderThemesFromAI } from "./aiDeckBuilder";
+import { getCommanderPlan } from "./commanderPlan";
+import { assignRole, roleToFamily, countByRoleFamily } from "./roleAssignment";
+import { buildShortlist, trimHighCmcForTempo } from "./candidateShortlist";
+import { packageCompletionScore } from "./packages";
+import {
+  roleFulfillmentBonus,
+  cmcClumpPenalty,
+  interactionBaselineBoost,
+  type RoleTargets,
+} from "./scoring";
+import { getProfileTargets } from "./profileTargets";
+import {
+  getPipDemand,
+  landProduces,
+  landScore,
+  type PipCounts,
+} from "./landOptimizer";
+import { runImprovementCycles } from "./deckOptimizer";
+import { explainPick, explainLand } from "./explainability";
 
 /**
  * Mana curve targets (commander-dependent in practice; these are defaults):
@@ -140,21 +160,6 @@ function countMainByType(main: CardInDeck[]): Record<string, number> {
   return counts;
 }
 
-function assignRole(card: CardInfo): CardRole {
-  const text = (card.oracleText ?? "").toLowerCase();
-  const typeLine = (card.typeLine ?? "").toLowerCase();
-  if (typeLine.includes("land")) return "land";
-
-  if (RAMP_KEYWORDS.some((k) => text.includes(k.toLowerCase()))) return "ramp";
-  if (DRAW_KEYWORDS.some((k) => text.includes(k.toLowerCase()))) return "draw";
-  if (SWEEPER_KEYWORDS.some((k) => text.includes(k.toLowerCase())) && REMOVAL_KEYWORDS.some((k) => text.includes(k.toLowerCase()))) return "sweeper";
-  if (REMOVAL_KEYWORDS.some((k) => text.includes(k.toLowerCase()))) return "removal";
-  if (FINISHER_KEYWORDS.some((k) => text.includes(k.toLowerCase())) && (typeLine.includes("creature") || typeLine.includes("planeswalker"))) return "finisher";
-
-  if (typeLine.includes("creature") || typeLine.includes("planeswalker")) return "synergy";
-  return "utility";
-}
-
 /** Commander rule: card is legal if every color in its identity is in the commander's identity. */
 function colorIdentityMatches(commanderIdentity: string[], card: CardInfo): boolean {
   const allowed = new Set(commanderIdentity);
@@ -238,7 +243,7 @@ export async function buildDeck(params: {
   if (!commanderInfo) {
     throw new Error(`Commander not found: ${commander.name}. Sync the card database from Settings if you don't see commanders when searching.`);
   }
-  const BUILD_STEPS = 10;
+  const BUILD_STEPS = 11;
   const step = (i: number, msg: string) => {
     const p = 0.05 + (0.93 * Math.min(i, BUILD_STEPS)) / BUILD_STEPS;
     onProgress?.("building", p, msg);
@@ -259,7 +264,10 @@ export async function buildDeck(params: {
     candidateEntries.push({ card, owned: o, role: assignRole(card) });
   }
 
-  const nonlandCandidates = candidateEntries.filter((e) => e.role !== "land");
+  const plan = getCommanderPlan(commanderInfo);
+  const candidatePool = trimHighCmcForTempo(buildShortlist(candidateEntries, plan), plan);
+
+  const nonlandCandidates = candidatePool.filter((e) => roleToFamily(e.role) !== "land");
   if (nonlandCandidates.length === 0) {
     if (owned.length === 0) {
       throw new Error(
@@ -285,20 +293,10 @@ export async function buildDeck(params: {
     }
   }
 
-  // Typical 99-card breakdown: 34–38 lands, 10–15 ramp, 10–12 draw, 10–15 removal, 3–6 wipes, 25–30 synergy
-  const TARGET_LANDS = 36;
-  const MAX_NONLANDS = 99 - TARGET_LANDS; // 63
-  let targetRamp = 12;
-  let targetDraw = 11;
-  let targetRemoval = 12;
-  let targetSweeper = 4;
-  const targetThemeSynergy = 25;
-  let targetFinisher = 4;
-
-  const preferredTribes = getPreferredTribes(commanderInfo);
-  const commanderCheats = commanderCheatsCreatures(commanderInfo);
-  const commanderCostReduce = commanderReducesTribeCost(commanderInfo);
-  let commanderThemes: CommanderThemeId[] = getCommanderThemes(commanderInfo);
+  const preferredTribes = plan.preferredTribes;
+  const commanderCheats = plan.commanderCheatsCreatures;
+  const commanderCostReduce = plan.commanderReducesCost;
+  let commanderThemes: CommanderThemeId[] = plan.primaryThemes;
   try {
     const aiThemes = await getCommanderThemesFromAI({
       commanderName: commander.name,
@@ -313,22 +311,37 @@ export async function buildDeck(params: {
   const commanderIsSpellslinger = commanderThemes.includes("spellslinger");
   const commanderIsVoltron = commanderThemes.includes("voltron");
 
-  // Archetype-specific role targets and type caps
-  if (archetype === "control") {
-    targetRemoval = 15;
-    targetDraw = 13;
-    targetSweeper = 6;
-  }
-  if (archetype === "spellslinger") {
-    targetDraw = 14;
-  }
-  if (archetype === "voltron") {
-    targetFinisher = 6;
-  }
+  // Phase 4: profile-driven targets (power, meta, playstyle, archetype)
+  const profile = getProfileTargets(plan, options);
+  const targetRamp = profile.targetRamp;
+  const targetDraw = profile.targetDraw;
+  const targetRemoval = profile.targetRemoval;
+  const targetInteraction = profile.targetInteraction;
+  const targetSweeper = profile.targetSweeper;
+  const targetFinisher = profile.targetFinisher;
+  const targetThemeSynergy = profile.targetThemeSynergy;
+  const MIN_INTERACTION_TOTAL = profile.minInteractionTotal;
+  const TARGET_LANDS = Math.round((profile.targetLandsMin + profile.targetLandsMax) / 2);
+  const MAX_LANDS = profile.targetLandsMax;
+  const MAX_NONLANDS = 99 - profile.targetLandsMin;
 
-  /** Ideal curve: bell peaking at 2–3 MV; target avg ≤ 3.0 (aim 2.5); majority 2–4 drops. */
-  const TARGET_AVG_CMC = 2.5;
-  const MAX_AVG_CMC = 3.0;
+  /** Role targets for contextual scoring (Phase 3.1). */
+  const roleTargets: RoleTargets = {
+    ramp: targetRamp,
+    draw: targetDraw,
+    removal: targetRemoval,
+    interaction: targetInteraction,
+    sweeper: targetSweeper,
+    finisher: targetFinisher,
+  };
+
+  /** Curve from CommanderPlan + profile (Phase 4.2). */
+  const TARGET_AVG_CMC = profile.targetAvgCmc;
+  const MAX_AVG_CMC = profile.maxAvgCmc;
+
+  /** Resolve current main deck to CardInfo[] for package-completion scoring. */
+  const mainCardInfos = (currentMain: CardInDeck[]): CardInfo[] =>
+    currentMain.map((c) => cardInfos.get(c.name.toLowerCase())).filter(Boolean) as CardInfo[];
 
   /** How much we want a card at this CMC (1 = ideal band 2–4, peak 2–3). */
   function curveWeight(cmc: number): number {
@@ -350,7 +363,7 @@ export async function buildDeck(params: {
     return 0.9;  // 7+ still good
   }
 
-  /** Score for adding this card given current main (higher = better curve fit). */
+  /** Score for adding this card given current main (higher = better curve fit). Includes CMC clump penalty. */
   function curveScore(card: CardInfo, currentMain: CardInDeck[]): number {
     const cmc = typeof card.cmc === "number" ? card.cmc : 0;
     const totalCmc = currentMain.reduce((s, c) => s + (c.cmc ?? 0), 0);
@@ -359,12 +372,19 @@ export async function buildDeck(params: {
     const weight = curveWeight(cmc);
     const avgPenalty = newAvg > MAX_AVG_CMC ? (newAvg - MAX_AVG_CMC) * 0.5 : 0;
     const towardTarget = Math.abs(newAvg - TARGET_AVG_CMC) < Math.abs((totalCmc / (count || 1)) - TARGET_AVG_CMC) ? 0.1 : 0;
-    return weight - avgPenalty + towardTarget;
+    const clumpPenalty = cmcClumpPenalty(card, currentMain);
+    return weight - avgPenalty + towardTarget + clumpPenalty;
   }
 
-  /** Curve + commander-ability synergy so every slot prefers cards that support the commander. */
+  /** Curve + commander-ability synergy + package completion + role fulfillment + interaction baseline. */
   function curveWithSynergyScore(card: CardInfo, currentMain: CardInDeck[]): number {
-    return curveScore(card, currentMain) + commanderSynergyScore(card, commanderThemes);
+    return (
+      curveScore(card, currentMain) +
+      commanderSynergyScore(card, commanderThemes) +
+      packageCompletionScore(card, mainCardInfos(currentMain), plan) +
+      roleFulfillmentBonus(card, currentMain, roleTargets) +
+      interactionBaselineBoost(card, currentMain, MIN_INTERACTION_TOTAL)
+    );
   }
 
   /**
@@ -384,26 +404,35 @@ export async function buildDeck(params: {
     const towardTarget = Math.abs(newAvg - TARGET_AVG_CMC) < Math.abs((totalCmc / (count || 1)) - TARGET_AVG_CMC) ? 0.1 : 0;
     const base = weight - avgPenalty + towardTarget;
     const themeBonus = matchesTribe ? 3.5 : 0;  // tribe cards must dominate so the deck revolves around the commander
-    const synergyBonus = commanderSynergyScore(card, commanderThemes);  // any commander: favor cards that support its abilities
-    return base + themeBonus + synergyBonus;
+    const synergyBonus = commanderSynergyScore(card, commanderThemes);
+    const pkgBonus = packageCompletionScore(card, mainCardInfos(currentMain), plan);
+    const roleBonus = roleFulfillmentBonus(card, currentMain, roleTargets);
+    const interactionBoost = interactionBaselineBoost(card, currentMain, MIN_INTERACTION_TOTAL);
+    return base + themeBonus + synergyBonus + pkgBonus + roleBonus + interactionBoost;
   }
 
-  /** Score for spellslinger: favor instants and sorceries. */
+  /** Score for spellslinger: favor instants and sorceries + package completion. */
   function spellslingerScore(card: CardInfo, currentMain: CardInDeck[]): number {
     const base = curveScore(card, currentMain);
     const line = (card.typeLine ?? "").toLowerCase();
     const spellBonus = (line.includes("instant") || line.includes("sorcery")) ? 1.8 : 0;
     const synergyBonus = commanderSynergyScore(card, commanderThemes);
-    return base + spellBonus + synergyBonus;
+    const pkgBonus = packageCompletionScore(card, mainCardInfos(currentMain), plan);
+    const roleBonus = roleFulfillmentBonus(card, currentMain, roleTargets);
+    const interactionBoost = interactionBaselineBoost(card, currentMain, MIN_INTERACTION_TOTAL);
+    return base + spellBonus + synergyBonus + pkgBonus + roleBonus + interactionBoost;
   }
 
-  /** Score for voltron: favor equipment and auras. */
+  /** Score for voltron: favor equipment and auras + package completion. */
   function voltronScore(card: CardInfo, currentMain: CardInDeck[]): number {
     const base = curveScore(card, currentMain);
     const line = (card.typeLine ?? "").toLowerCase();
     const voltronBonus = (line.includes("equipment") || line.includes("aura")) ? 2.0 : 0;
     const synergyBonus = commanderSynergyScore(card, commanderThemes);
-    return base + voltronBonus + synergyBonus;
+    const pkgBonus = packageCompletionScore(card, mainCardInfos(currentMain), plan);
+    const roleBonus = roleFulfillmentBonus(card, currentMain, roleTargets);
+    const interactionBoost = interactionBaselineBoost(card, currentMain, MIN_INTERACTION_TOTAL);
+    return base + voltronBonus + synergyBonus + pkgBonus + roleBonus + interactionBoost;
   }
 
   /**
@@ -414,7 +443,10 @@ export async function buildDeck(params: {
     const base = curveScore(card, currentMain);
     const tribeBonus = preferredTribes.length > 0 && cardMatchesTribes(card, preferredTribes) ? 3.5 : 0;
     const synergyBonus = commanderSynergyScore(card, commanderThemes);
-    return base + tribeBonus + synergyBonus;
+    const pkgBonus = packageCompletionScore(card, mainCardInfos(currentMain), plan);
+    const roleBonus = roleFulfillmentBonus(card, currentMain, roleTargets);
+    const interactionBoost = interactionBaselineBoost(card, currentMain, MIN_INTERACTION_TOTAL);
+    return base + tribeBonus + synergyBonus + pkgBonus + roleBonus + interactionBoost;
   }
 
   type ScoreFn = (card: CardInfo, currentMain: CardInDeck[]) => number;
@@ -427,8 +459,9 @@ export async function buildDeck(params: {
     : (preferredTribes.length > 0 || archetype === "tribal") ? themeAwareScore
     : curveWithSynergyScore;
 
-  const byRole = (r: CardRole) =>
-    candidateEntries.filter((e) => e.role === r && !used.has(e.card.name.toLowerCase()));
+  /** Filter candidates by role family (e.g. all ramp_* count as "ramp") for ratio targets. */
+  const byRoleFamily = (family: RoleFamily) =>
+    candidatePool.filter((e) => roleToFamily(e.role) === family && !used.has(e.card.name.toLowerCase()));
 
   // Type balance and creature targets by archetype (and commander theme: spellslinger commander gets more spell slots)
   const { minCreatures: MIN_CREATURES, targetCreatures: TARGET_CREATURES, maxInstants: MAX_INSTANTS, maxSorceries: MAX_SORCERIES } = (() => {
@@ -457,7 +490,7 @@ export async function buildDeck(params: {
    * only cards that would exceed type caps.
    */
   const addBest = (
-    pool: typeof candidateEntries,
+    pool: typeof candidatePool,
     limit: number,
     opts?: { onlyType?: "creature"; scoreFn?: ScoreFn }
   ) => {
@@ -485,20 +518,42 @@ export async function buildDeck(params: {
   // When commander has a tribe, prefer that tribe in every role; else prefer cards that synergize with commander abilities
   const roleScoreFn = preferredTribes.length > 0 && archetype !== "spellslinger" ? tribePreferredScore : curveWithSynergyScore;
   step(1, "Adding ramp…");
-  addBest(byRole("ramp"), targetRamp, { scoreFn: roleScoreFn });
+  addBest(byRoleFamily("ramp"), targetRamp, { scoreFn: roleScoreFn });
   step(2, "Adding draw…");
-  addBest(byRole("draw"), targetDraw, { scoreFn: roleScoreFn });
+  addBest(byRoleFamily("draw"), targetDraw, { scoreFn: roleScoreFn });
   step(3, "Adding removal…");
-  addBest(byRole("removal"), targetRemoval, { scoreFn: roleScoreFn });
-  step(4, "Adding sweepers…");
-  addBest(byRole("sweeper"), targetSweeper, { scoreFn: roleScoreFn });
+  addBest(byRoleFamily("removal"), targetRemoval, { scoreFn: roleScoreFn });
+  step(4, "Adding interaction…");
+  addBest(byRoleFamily("interaction"), targetInteraction, { scoreFn: roleScoreFn });
+  step(5, "Adding sweepers…");
+  addBest(byRoleFamily("sweeper"), targetSweeper, { scoreFn: roleScoreFn });
 
-  step(5, "Adding theme synergy…");
+  // Interaction baseline: ensure minimum total removal + sweeper + interaction + protection (Phase 3.2)
+  const interactionFamilies: RoleFamily[] = ["removal", "sweeper", "interaction", "protection"];
+  const currentInteractionTotal =
+    (countByRoleFamily(main).removal ?? 0) +
+    (countByRoleFamily(main).sweeper ?? 0) +
+    (countByRoleFamily(main).interaction ?? 0) +
+    (countByRoleFamily(main).protection ?? 0);
+  if (currentInteractionTotal < MIN_INTERACTION_TOTAL && main.length < MAX_NONLANDS) {
+    const interactionPool = candidatePool.filter(
+      (e) =>
+        interactionFamilies.includes(roleToFamily(e.role)) &&
+        !used.has(e.card.name.toLowerCase())
+    );
+    const toAdd = Math.min(
+      MIN_INTERACTION_TOTAL - currentInteractionTotal,
+      MAX_NONLANDS - main.length
+    );
+    addBest(interactionPool, main.length + toAdd, { scoreFn: roleScoreFn });
+  }
+
+  step(6, "Adding theme synergy…");
   // Voltron: prioritize equipment and auras early (by archetype or commander theme)
   if (archetype === "voltron" || commanderIsVoltron) {
-    const equipmentAuraPool = candidateEntries.filter(
+    const equipmentAuraPool = candidatePool.filter(
       (e) =>
-        e.role !== "land" &&
+        roleToFamily(e.role) !== "land" &&
         !used.has(e.card.name.toLowerCase()) &&
         (typeLineIncludes(e.card.typeLine, "Equipment") || typeLineIncludes(e.card.typeLine, "Aura"))
     );
@@ -508,55 +563,55 @@ export async function buildDeck(params: {
   // Commander-centric: when the commander has a tribe (Ur-Dragon, Kaalia, etc.), use ONLY tribe for synergy/finisher/creatures so the deck is exclusively on-theme when the pool allows
   const themePoolTarget = preferredTribes.length > 0 && archetype !== "spellslinger" ? 32 : targetThemeSynergy;
   if (preferredTribes.length > 0 && archetype !== "spellslinger") {
-    const themePool = candidateEntries.filter(
+    const themePool = candidatePool.filter(
       (e) =>
-        e.role !== "land" &&
+        roleToFamily(e.role) !== "land" &&
         !used.has(e.card.name.toLowerCase()) &&
-        (e.role === "synergy" || e.role === "finisher") &&
+        (roleToFamily(e.role) === "synergy" || roleToFamily(e.role) === "finisher") &&
         cardMatchesTribes(e.card, preferredTribes)
     );
     addBest(themePool, themePoolTarget, { scoreFn: synergyScoreFn });
-    const tribeSynergyRest = candidateEntries.filter(
+    const tribeSynergyRest = candidatePool.filter(
       (e) =>
-        e.role === "synergy" && !used.has(e.card.name.toLowerCase()) && cardMatchesTribes(e.card, preferredTribes)
+        roleToFamily(e.role) === "synergy" && !used.has(e.card.name.toLowerCase()) && cardMatchesTribes(e.card, preferredTribes)
     );
     addBest(tribeSynergyRest, Math.min(main.length + 25, MAX_NONLANDS), { scoreFn: synergyScoreFn });
     // No non-tribe synergy: with a large pool (e.g. 2000 cards) we want exclusively angels/demons/dragons or dragons
   } else {
-    addBest(byRole("synergy"), targetThemeSynergy, { scoreFn: synergyScoreFn });
+    addBest(byRoleFamily("synergy"), targetThemeSynergy, { scoreFn: synergyScoreFn });
   }
-  step(6, "Adding finishers…");
+  step(7, "Adding finishers…");
   if (preferredTribes.length > 0 && archetype !== "spellslinger") {
-    const tribeFinishers = candidateEntries.filter(
+    const tribeFinishers = candidatePool.filter(
       (e) =>
-        e.role === "finisher" && !used.has(e.card.name.toLowerCase()) && cardMatchesTribes(e.card, preferredTribes)
+        roleToFamily(e.role) === "finisher" && !used.has(e.card.name.toLowerCase()) && cardMatchesTribes(e.card, preferredTribes)
     );
     addBest(tribeFinishers, main.length + targetFinisher, { scoreFn: synergyScoreFn });
   } else {
-    addBest(byRole("finisher"), targetFinisher, { scoreFn: synergyScoreFn });
+    addBest(byRoleFamily("finisher"), targetFinisher, { scoreFn: synergyScoreFn });
   }
 
   // Reserve slots for enchantments and sorceries (still respect type caps)
-  const utilityEnchantments = candidateEntries.filter(
-    (e) => e.role === "utility" && !used.has(e.card.name.toLowerCase()) && typeLineIncludes(e.card.typeLine, "enchantment")
+  const utilityEnchantments = candidatePool.filter(
+    (e) => roleToFamily(e.role) === "utility" && !used.has(e.card.name.toLowerCase()) && typeLineIncludes(e.card.typeLine, "enchantment")
   );
-  const utilitySorceries = candidateEntries.filter(
-    (e) => e.role === "utility" && !used.has(e.card.name.toLowerCase()) && typeLineIncludes(e.card.typeLine, "sorcery")
+  const utilitySorceries = candidatePool.filter(
+    (e) => roleToFamily(e.role) === "utility" && !used.has(e.card.name.toLowerCase()) && typeLineIncludes(e.card.typeLine, "sorcery")
   );
-  step(7, "Adding utility…");
+  step(8, "Adding utility…");
   addBest(utilityEnchantments, main.length + 5, { scoreFn: curveWithSynergyScore });
   addBest(utilitySorceries, main.length + 5, { scoreFn: curveWithSynergyScore });
-  addBest(byRole("utility"), MAX_NONLANDS - main.length, archetype === "spellslinger" || commanderIsSpellslinger ? { scoreFn: spellslingerScore } : archetype === "voltron" || commanderIsVoltron ? { scoreFn: voltronScore } : { scoreFn: curveWithSynergyScore });
+  addBest(byRoleFamily("utility"), MAX_NONLANDS - main.length, archetype === "spellslinger" || commanderIsSpellslinger ? { scoreFn: spellslingerScore } : archetype === "voltron" || commanderIsVoltron ? { scoreFn: voltronScore } : { scoreFn: curveWithSynergyScore });
 
-  step(8, "Filling creatures…");
+  step(9, "Filling creatures…");
   const creatureCount = countMainByType(main).creature ?? 0;
   const needCreatures = TARGET_CREATURES - creatureCount;
   if (needCreatures > 0 && main.length < MAX_NONLANDS && TARGET_CREATURES > 0) {
     if (preferredTribes.length > 0 && archetype !== "spellslinger") {
       // Tribal commander: fill creature slots with tribe creatures ONLY so Ur-Dragon gets only Dragons, Kaalia only Angels/Demons/Dragons
-      const tribeCreaturePool = candidateEntries.filter(
+      const tribeCreaturePool = candidatePool.filter(
         (e) =>
-          e.role !== "land" &&
+          roleToFamily(e.role) !== "land" &&
           !used.has(e.card.name.toLowerCase()) &&
           typeLineIncludes(e.card.typeLine, "creature") &&
           cardMatchesTribes(e.card, preferredTribes)
@@ -566,18 +621,18 @@ export async function buildDeck(params: {
       // If we still need more creatures (pool didn't have enough tribe), fill with non-tribe only as fallback so deck isn't short
       const stillNeed = TARGET_CREATURES - (countMainByType(main).creature ?? 0);
       if (stillNeed > 0 && main.length < MAX_NONLANDS) {
-        const fallbackPool = candidateEntries.filter(
+        const fallbackPool = candidatePool.filter(
           (e) =>
-            e.role !== "land" &&
+            roleToFamily(e.role) !== "land" &&
             !used.has(e.card.name.toLowerCase()) &&
             typeLineIncludes(e.card.typeLine, "creature")
         );
         addBest(fallbackPool, main.length + Math.min(stillNeed, MAX_NONLANDS - main.length), { onlyType: "creature", scoreFn: curveWithSynergyScore });
       }
     } else {
-      const creaturePool = candidateEntries.filter(
+      const creaturePool = candidatePool.filter(
         (e) =>
-          e.role !== "land" &&
+          roleToFamily(e.role) !== "land" &&
           !used.has(e.card.name.toLowerCase()) &&
           typeLineIncludes(e.card.typeLine, "creature")
       );
@@ -593,9 +648,9 @@ export async function buildDeck(params: {
       (c) => typeLineIncludes(c.typeLine, "creature") && preferredTribes.some((t) => (c.typeLine ?? "").toLowerCase().includes(t))
     ).length;
     if (tribeCreatureCount < MIN_TRIBE_CREATURES) {
-      const tribeCreaturePool = candidateEntries.filter(
+      const tribeCreaturePool = candidatePool.filter(
         (e) =>
-          e.role !== "land" &&
+          roleToFamily(e.role) !== "land" &&
           !used.has(e.card.name.toLowerCase()) &&
           typeLineIncludes(e.card.typeLine, "creature") &&
           cardMatchesTribes(e.card, preferredTribes)
@@ -605,22 +660,39 @@ export async function buildDeck(params: {
     }
   }
 
-  step(9, "Adding lands…");
-  // Lands must match commander color identity (use effective identity for lands with empty stored).
-  // Exclude basic land names so we add basics for free and don't use collection slots for them.
-  const landCandidates = candidateEntries.filter(
+  step(10, "Adding lands…");
+  // Phase 4.3: lands optimized by pip demand and fixing (untapped preferred).
+  const pipDemand = getPipDemand(main, cardInfos);
+  const landCandidates = candidatePool.filter(
     (e) =>
-      e.role === "land" &&
+      roleToFamily(e.role) === "land" &&
       !used.has(e.card.name.toLowerCase()) &&
       colorIdentityMatches(identity, e.card) &&
       !BASIC_LAND_NAMES.has(e.card.name.toLowerCase().trim())
   );
-  const landByCmc = [...landCandidates].sort((a, b) => a.card.cmc - b.card.cmc);
   const landSlotsTarget = Math.min(99 - main.length, MAX_LANDS);
-  for (const e of landByCmc) {
-    if (landSlots.length >= landSlotsTarget) break;
+  let alreadyProducing: PipCounts = { W: 0, U: 0, B: 0, R: 0, G: 0 };
+  const landPool = [...landCandidates];
+  while (landSlots.length < landSlotsTarget && landPool.length > 0) {
+    let bestIdx = 0;
+    let bestScore = -1;
+    for (let i = 0; i < landPool.length; i++) {
+      const e = landPool[i]!;
+      if (used.has(e.card.name.toLowerCase())) continue;
+      const s = landScore(e.card, pipDemand, alreadyProducing, identity);
+      if (s > bestScore) {
+        bestScore = s;
+        bestIdx = i;
+      }
+    }
+    const e = landPool[bestIdx]!;
+    if (used.has(e.card.name.toLowerCase()) || bestScore < 0) break;
     used.add(e.card.name.toLowerCase());
     landSlots.push(cardToDeckEntry(e.card, "land"));
+    const prod = landProduces(e.card);
+    for (const c of ["W", "U", "B", "R", "G"] as const)
+      alreadyProducing[c] = (alreadyProducing[c] ?? 0) + (prod[c] ?? 0);
+    landPool.splice(bestIdx, 1);
   }
 
   const colorToBasic: Record<string, string> = {
@@ -645,16 +717,53 @@ export async function buildDeck(params: {
     landSlots.length = Math.min(99 - main.length, MAX_LANDS);
   }
 
+  // Phase 5: improvement cycles (swap nonlands to improve deck score)
+  step(11, "Optimizing…");
+  const { main: mainAfterOptimizer, improved: _optimizerImproved } = runImprovementCycles({
+    main,
+    lands: landSlots,
+    candidatePool,
+    used,
+    cardInfos,
+    plan,
+    profile,
+    roleTargets,
+    commanderThemes,
+    scoreFn: preferredTribes.length > 0 && archetype !== "spellslinger" ? tribePreferredScore : curveWithSynergyScore,
+    onProgress: (msg) => onProgress?.("building", 0.96, msg),
+  });
+  main.length = 0;
+  main.push(...mainAfterOptimizer);
+
+  // Phase 6: attach per-card reasons for explainability
+  for (const c of main) {
+    c.reason = explainPick(
+      c,
+      cardInfos.get(c.name.toLowerCase()),
+      main,
+      plan,
+      roleTargets,
+      commanderThemes
+    );
+  }
+  for (const c of landSlots) {
+    c.reason = explainLand(c, cardInfos.get(c.name.toLowerCase()), identity);
+  }
+
   const byRoleCount: Partial<Record<CardRole, number>> = {};
   for (const c of [...main, ...landSlots]) {
-    const r = c.role ?? "other";
+    const r = (c.role ?? "other") as CardRole;
     byRoleCount[r] = (byRoleCount[r] ?? 0) + 1;
+  }
+  const byRoleFamilyCount = countByRoleFamily(main);
+  if (landSlots.length > 0) {
+    byRoleFamilyCount.land = (byRoleFamilyCount.land ?? 0) + landSlots.length;
   }
 
   const totalCards = main.length + landSlots.length;
   const shortBy = totalCards < 99 ? 99 - totalCards : undefined;
 
-  step(BUILD_STEPS, "Done");
+  step(12, "Done");
   onProgress?.("building", 1, "Done");
 
   return {
@@ -670,6 +779,7 @@ export async function buildDeck(params: {
       totalNonlands: main.length,
       totalLands: landSlots.length,
       byRole: byRoleCount,
+      byRoleFamily: byRoleFamilyCount,
       colorIdentity: identity,
       ...(shortBy != null && { shortBy }),
     },

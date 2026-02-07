@@ -73,6 +73,7 @@ export default async function DeckDetailPage({
           commanderName={deck.commanderName}
           data={data}
           legalityEnforced={deck.legalityEnforced}
+          collectionId={deck.collectionId ?? undefined}
         />
       </main>
     </div>
