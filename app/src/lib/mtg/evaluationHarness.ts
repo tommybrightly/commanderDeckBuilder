@@ -2,7 +2,7 @@ import type { CardInfo, CardInDeck, CommanderChoice, DeckList, OwnedCard } from 
 import type { CommanderPlan } from "./commanderPlan";
 import type { ProfileTargets } from "./profileTargets";
 import { countByRoleFamily } from "./roleAssignment";
-import { getCommanderPlan } from "./commanderPlan";
+import { getCommanderPlanWithCache } from "./commanderProfileCache";
 import { getProfileTargets } from "./profileTargets";
 import { buildDeck } from "./deckBuilderEngine";
 import { commanderSynergyScore } from "./commanderThemes";
@@ -381,7 +381,7 @@ export async function runHarness(opts: RunHarnessOptions = {}): Promise<HarnessR
         cardInfos,
       });
       const totalCards = deckList.main.length + deckList.lands.length;
-      const plan = getCommanderPlan(commanderInfo);
+      const plan = await getCommanderPlanWithCache(commanderInfo);
       const profile = getProfileTargets(
         plan,
         { enforceLegality: options.enforceLegality, archetype: options.archetype }

@@ -146,5 +146,20 @@ export function getProfileTargets(
     });
   }
 
+  // Commander plan overrides: ensure we meet what this commander's game plan needs (take max so we never go below).
+  const planOverrides = plan.roleTargetOverrides;
+  if (planOverrides) {
+    if (planOverrides.targetRamp != null) result.targetRamp = Math.max(result.targetRamp, planOverrides.targetRamp);
+    if (planOverrides.targetDraw != null) result.targetDraw = Math.max(result.targetDraw, planOverrides.targetDraw);
+    if (planOverrides.targetRemoval != null) result.targetRemoval = Math.max(result.targetRemoval, planOverrides.targetRemoval);
+    if (planOverrides.targetInteraction != null) result.targetInteraction = Math.max(result.targetInteraction, planOverrides.targetInteraction);
+    if (planOverrides.targetSweeper != null) result.targetSweeper = Math.max(result.targetSweeper, planOverrides.targetSweeper);
+    if (planOverrides.targetFinisher != null) result.targetFinisher = Math.max(result.targetFinisher, planOverrides.targetFinisher);
+    if (planOverrides.targetThemeSynergy != null) result.targetThemeSynergy = Math.max(result.targetThemeSynergy, planOverrides.targetThemeSynergy);
+    if (planOverrides.minInteractionTotal != null) result.minInteractionTotal = Math.max(result.minInteractionTotal, planOverrides.minInteractionTotal);
+    if (planOverrides.targetLandsMin != null) result.targetLandsMin = Math.max(result.targetLandsMin, planOverrides.targetLandsMin);
+    if (planOverrides.targetLandsMax != null) result.targetLandsMax = Math.min(result.targetLandsMax, planOverrides.targetLandsMax);
+  }
+
   return result;
 }

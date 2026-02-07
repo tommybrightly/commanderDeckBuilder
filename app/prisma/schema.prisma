@@ -75,6 +75,12 @@ model Card {
   collectionItems CollectionItem[]
 }
 
+model CommanderProfile {
+  oracleId   String   @id // Scryfall oracle ID; matches Card.oracleId
+  planJson   String   // JSON-serialized CommanderPlan
+  updatedAt  DateTime @updatedAt
+}
+
 model Collection {
   id        String   @id @default(cuid())
   userId    String

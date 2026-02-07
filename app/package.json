@@ -11,7 +11,8 @@
     "test:watch": "vitest",
     "lint": "eslint",
     "seed-cards": "tsx scripts/import-scryfall-cards.ts",
-    "seed-from-file": "tsx scripts/seed-from-bulk-list.ts"
+    "seed-from-file": "tsx scripts/seed-from-bulk-list.ts",
+    "build-commander-profiles": "tsx scripts/build-commander-profiles.ts"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.1",

@@ -12,7 +12,7 @@ import { getCardsByNamesFromDb, getCardByNameFromDb } from "./cardDb";
 import type { CommanderThemeId } from "./commanderThemes";
 import { getCommanderThemes, commanderSynergyScore } from "./commanderThemes";
 import { getCommanderThemesFromAI } from "./aiDeckBuilder";
-import { getCommanderPlan } from "./commanderPlan";
+import { getCommanderPlanWithCache } from "./commanderProfileCache";
 import { assignRole, roleToFamily, countByRoleFamily } from "./roleAssignment";
 import { buildShortlist, trimHighCmcForTempo } from "./candidateShortlist";
 import { packageCompletionScore } from "./packages";
@@ -264,7 +264,7 @@ export async function buildDeck(params: {
     candidateEntries.push({ card, owned: o, role: assignRole(card) });
   }
 
-  const plan = getCommanderPlan(commanderInfo);
+  const plan = await getCommanderPlanWithCache(commanderInfo);
   const candidatePool = trimHighCmcForTempo(buildShortlist(candidateEntries, plan), plan);
 
   const nonlandCandidates = candidatePool.filter((e) => roleToFamily(e.role) !== "land");

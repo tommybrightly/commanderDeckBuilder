@@ -1,5 +1,5 @@
 import type { CardInfo } from "./types";
-import type { RequiredPackageId } from "./commanderPlan";
+import type { RequiredPackageId, WinConditionTargets } from "./commanderPlan";
 import type { CommanderPlan } from "./commanderPlan";
 
 /**
@@ -158,60 +158,78 @@ export function getPackagesFilledByCard(card: CardInfo): RequiredPackageId[] {
   return ids.filter((id) => cardFillsPackage(card, id));
 }
 
-/** Suggested min counts per package for a plan (from requiredPackages). */
+/** Default min counts per package when plan.packageMinimums is not set for that package. */
+const DEFAULT_PACKAGE_MINIMUMS: Record<RequiredPackageId, number> = {
+  sac_outlets: 3,
+  sac_fodder: 5,
+  sac_payoffs: 4,
+  token_makers: 6,
+  token_payoffs: 4,
+  reanimate_targets: 6,
+  reanimate_effects: 4,
+  discard_outlets: 3,
+  cheap_spells: 15,
+  spell_payoffs: 6,
+  equipment_auras: 10,
+  voltron_protection: 4,
+  ramp_density: 0, // covered by role targets
+  draw_engines: 0,
+};
+
+/**
+ * Min counts per package for this plan. Uses plan.packageMinimums when set (from in-depth profile),
+ * otherwise defaults per requiredPackages. Drives packageCompletionScore so we pick the best cards for the commander.
+ */
 export function getPackageTargets(plan: CommanderPlan): Partial<Record<RequiredPackageId, number>> {
   const targets: Partial<Record<RequiredPackageId, number>> = {};
+  const planMins = plan.packageMinimums ?? {};
   for (const pkg of plan.requiredPackages) {
-    switch (pkg) {
-      case "sac_outlets":
-        targets.sac_outlets = 3;
-        break;
-      case "sac_fodder":
-        targets.sac_fodder = 5;
-        break;
-      case "sac_payoffs":
-        targets.sac_payoffs = 4;
-        break;
-      case "token_makers":
-        targets.token_makers = 6;
-        break;
-      case "token_payoffs":
-        targets.token_payoffs = 4;
-        break;
-      case "reanimate_targets":
-        targets.reanimate_targets = 6;
-        break;
-      case "reanimate_effects":
-        targets.reanimate_effects = 4;
-        break;
-      case "discard_outlets":
-        targets.discard_outlets = 3;
-        break;
-      case "cheap_spells":
-        targets.cheap_spells = 15;
-        break;
-      case "spell_payoffs":
-        targets.spell_payoffs = 6;
-        break;
-      case "equipment_auras":
-        targets.equipment_auras = 10;
-        break;
-      case "voltron_protection":
-        targets.voltron_protection = 4;
-        break;
-      case "ramp_density":
-      case "draw_engines":
-        // Already covered by role targets (ramp, draw)
-        break;
-      default:
-        break;
+    const explicit = planMins[pkg];
+    if (explicit != null && explicit > 0) {
+      targets[pkg] = explicit;
+    } else {
+      const def = DEFAULT_PACKAGE_MINIMUMS[pkg];
+      if (def > 0) targets[pkg] = def;
     }
   }
   return targets;
 }
 
+/** Maps win-condition target keys to package IDs that fulfill them (for extra emphasis when short). */
+const WIN_CONDITION_TO_PACKAGES: Record<keyof WinConditionTargets, RequiredPackageId[]> = {
+  drainPayoffs: ["sac_payoffs"],
+  tokenMakers: ["token_makers"],
+  tokenPayoffs: ["token_payoffs"],
+  reanimateTargets: ["reanimate_targets"],
+  reanimateEffects: ["reanimate_effects"],
+  comboInteraction: [], // interaction is role-based, not package
+};
+
+function winConditionFulfillmentBoost(
+  card: CardInfo,
+  currentMainCardInfos: CardInfo[],
+  plan: CommanderPlan
+): number {
+  const wct = plan.winConditionTargets;
+  if (!wct) return 0;
+  const filledByCard = getPackagesFilledByCard(card);
+  let boost = 0;
+  for (const [key, targetMin] of Object.entries(wct) as [keyof WinConditionTargets, number][]) {
+    if (targetMin == null) continue;
+    const pkgs = WIN_CONDITION_TO_PACKAGES[key];
+    if (!pkgs?.length) continue;
+    const currentCount = pkgs.reduce((sum, pkg) => {
+      return sum + currentMainCardInfos.filter((c) => cardFillsPackage(c, pkg)).length;
+    }, 0);
+    if (currentCount >= targetMin) continue;
+    const fillsThis = filledByCard.some((p) => pkgs.includes(p));
+    if (fillsThis) boost += 0.25; // extra emphasis on filling primary win path
+  }
+  return boost;
+}
+
 /**
- * Score boost when adding this card helps complete a required package;
+ * Score boost when adding this card helps complete a required package (and win-condition targets);
  * small penalty when that package is already satisfied.
  */
 export function packageCompletionScore(
@@ -221,19 +239,22 @@ export function packageCompletionScore(
 ): number {
   const targets = getPackageTargets(plan);
   const filledByCard = getPackagesFilledByCard(card);
-  if (filledByCard.length === 0) return 0;
-
   let score = 0;
-  for (const pkg of filledByCard) {
-    const target = targets[pkg];
-    if (target == null) continue;
-    const currentCount = currentMainCardInfos.filter((c) => cardFillsPackage(c, pkg)).length;
-    if (currentCount < target) {
-      const need = target - currentCount;
-      score += 0.4 * Math.min(need, 2); // boost up to ~0.8 per package we're short on
-    } else if (currentCount >= target + 2) {
-      score -= 0.15; // small penalty for oversaturating
+
+  if (filledByCard.length > 0) {
+    for (const pkg of filledByCard) {
+      const target = targets[pkg];
+      if (target == null) continue;
+      const currentCount = currentMainCardInfos.filter((c) => cardFillsPackage(c, pkg)).length;
+      if (currentCount < target) {
+        const need = target - currentCount;
+        score += 0.4 * Math.min(need, 2); // boost up to ~0.8 per package we're short on
+      } else if (currentCount >= target + 2) {
+        score -= 0.15; // small penalty for oversaturating
+      }
     }
   }
+
+  score += winConditionFulfillmentBoost(card, currentMainCardInfos, plan);
   return score;
 }

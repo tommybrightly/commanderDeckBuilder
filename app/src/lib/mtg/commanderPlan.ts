@@ -52,6 +52,47 @@ export type TempoId = "fast" | "medium" | "slow" | "variable";
 /** Curve shape hint for nonlands. */
 export type CurveShapeId = "low" | "mid" | "high" | "bimodal";
 
+/**
+ * Commander-derived overrides for role targets. Applied in getProfileTargets so the deck
+ * meets what this commander's game plan needs (e.g. spellslinger → more draw, voltron → more finishers).
+ */
+export type PlanRoleOverrides = Partial<{
+  targetRamp: number;
+  targetDraw: number;
+  targetRemoval: number;
+  targetInteraction: number;
+  targetSweeper: number;
+  targetFinisher: number;
+  targetThemeSynergy: number;
+  minInteractionTotal: number;
+  targetLandsMin: number;
+  targetLandsMax: number;
+}>;
+
+/**
+ * Explicit minimum card counts per strategy package. When set, the builder prioritizes
+ * filling these before generic slots. Theme- and win-condition-aware (e.g. sacrifice → higher sac counts).
+ */
+export type PackageMinimums = Partial<Record<RequiredPackageId, number>>;
+
+/**
+ * Win-condition-specific card targets. Ensures we have enough payoffs for the primary win path.
+ */
+export type WinConditionTargets = Partial<{
+  /** Min drain/life-loss payoffs (aristocrats, ping). */
+  drainPayoffs: number;
+  /** Min token producers. */
+  tokenMakers: number;
+  /** Min token payoffs (anthems, "creatures you control"). */
+  tokenPayoffs: number;
+  /** Min reanimation targets (big creatures). */
+  reanimateTargets: number;
+  /** Min reanimation effects. */
+  reanimateEffects: number;
+  /** Min stack interaction / combo enablers. */
+  comboInteraction: number;
+}>;
+
 export interface CommanderPlan {
   /** Commander name (for debugging/logging). */
   commanderName: string;
@@ -91,6 +132,21 @@ export interface CommanderPlan {
 
   /** Pip intensity: "low" | "medium" | "high" — affects fixing priority. */
   pipIntensity: "low" | "medium" | "high";
+
+  /**
+   * Commander-specific role targets. Merged in getProfileTargets (we take max with base so plan needs are met).
+   */
+  roleTargetOverrides?: PlanRoleOverrides;
+
+  /**
+   * Explicit minimum counts per required package. Used by packageCompletionScore so we pick the best cards for the plan.
+   */
+  packageMinimums?: PackageMinimums;
+
+  /**
+   * Win-condition card targets. Ensures enough payoffs for primary win path (drain, tokens, reanimator, combo).
+   */
+  winConditionTargets?: WinConditionTargets;
 }
 
 const CREATURE_SUBTYPES = new Set([
@@ -233,22 +289,137 @@ function detectPipIntensity(commander: CardInfo): "low" | "medium" | "high" {
   return "low";
 }
 
+/** Commander-specific role targets from themes and win conditions. */
+function detectRoleTargetOverrides(
+  _commander: CardInfo,
+  themes: CommanderThemeId[],
+  winConditions: WinConditionId[]
+): PlanRoleOverrides {
+  const overrides: PlanRoleOverrides = {};
+  if (themes.includes("spellslinger")) {
+    overrides.targetDraw = 13;
+    overrides.targetThemeSynergy = 28; // more slots for instants/sorceries
+  }
+  if (themes.includes("voltron")) {
+    overrides.targetFinisher = 6;
+    overrides.targetThemeSynergy = 22; // equipment/auras
+  }
+  if (themes.includes("tokens")) {
+    overrides.targetThemeSynergy = 28; // token makers + payoffs
+  }
+  if (themes.includes("sacrifice") || winConditions.includes("drain")) {
+    overrides.targetThemeSynergy = 26; // outlets + fodder + payoffs
+  }
+  if (themes.includes("graveyard")) {
+    overrides.targetDraw = 12; // looting/self-mill + draw
+  }
+  if (themes.includes("counters")) {
+    overrides.targetThemeSynergy = 26; // +1/+1 and proliferate
+  }
+  if (winConditions.includes("combo")) {
+    overrides.targetInteraction = 8;
+    overrides.minInteractionTotal = 12;
+  }
+  if (themes.includes("landfall")) {
+    overrides.targetRamp = 14; // landfall wants more land drops
+  }
+  return overrides;
+}
+
+/** Theme- and win-condition-aware package minimums. */
+function detectPackageMinimums(
+  themes: CommanderThemeId[],
+  requiredPackages: RequiredPackageId[],
+  winConditions: WinConditionId[]
+): PackageMinimums {
+  const min: PackageMinimums = {};
+  for (const pkg of requiredPackages) {
+    switch (pkg) {
+      case "sac_outlets":
+        min.sac_outlets = themes.includes("sacrifice") || winConditions.includes("drain") ? 4 : 3;
+        break;
+      case "sac_fodder":
+        min.sac_fodder = themes.includes("sacrifice") ? 6 : 5;
+        break;
+      case "sac_payoffs":
+        min.sac_payoffs = winConditions.includes("drain") ? 5 : 4;
+        break;
+      case "token_makers":
+        min.token_makers = themes.includes("tokens") || winConditions.includes("tokens_wide") ? 8 : 6;
+        break;
+      case "token_payoffs":
+        min.token_payoffs = themes.includes("tokens") ? 5 : 4;
+        break;
+      case "reanimate_targets":
+        min.reanimate_targets = themes.includes("graveyard") ? 7 : 6;
+        break;
+      case "reanimate_effects":
+        min.reanimate_effects = themes.includes("graveyard") ? 5 : 4;
+        break;
+      case "discard_outlets":
+        min.discard_outlets = 3;
+        break;
+      case "cheap_spells":
+        min.cheap_spells = themes.includes("spellslinger") ? 18 : 15;
+        break;
+      case "spell_payoffs":
+        min.spell_payoffs = themes.includes("spellslinger") ? 8 : 6;
+        break;
+      case "equipment_auras":
+        min.equipment_auras = themes.includes("voltron") ? 12 : 10;
+        break;
+      case "voltron_protection":
+        min.voltron_protection = themes.includes("voltron") ? 5 : 4;
+        break;
+      default:
+        break;
+    }
+  }
+  return min;
+}
+
+/** Win-condition-specific card targets so we have enough payoffs for the primary win path. */
+function detectWinConditionTargets(
+  winConditions: WinConditionId[],
+  themes: CommanderThemeId[]
+): WinConditionTargets {
+  const t: WinConditionTargets = {};
+  if (winConditions.includes("drain") || themes.includes("sacrifice")) {
+    t.drainPayoffs = 5;
+  }
+  if (winConditions.includes("tokens_wide") || themes.includes("tokens")) {
+    t.tokenMakers = 8;
+    t.tokenPayoffs = 5;
+  }
+  if (themes.includes("graveyard")) {
+    t.reanimateTargets = 7;
+    t.reanimateEffects = 5;
+  }
+  if (winConditions.includes("combo") || themes.includes("spellslinger")) {
+    t.comboInteraction = 10; // counters + tutors + card draw
+  }
+  return t;
+}
+
 /**
  * Build a CommanderPlan from the commander card. Uses oracle text, type line, and
- * theme detection. Later we can add data-derived plans and rule-based overrides.
+ * theme detection. Includes role overrides, package minimums, and win-condition targets
+ * so the builder picks the best cards for this commander's game plan.
  */
 export function getCommanderPlan(commander: CardInfo): CommanderPlan {
   const themes = getCommanderThemes(commander);
   const preferredTribes = getPreferredTribes(commander);
   const curveShape = detectCurveShape(commander, themes);
+  const winConditions = detectWinConditions(commander);
+  const requiredPackages = detectRequiredPackages(commander, themes);
 
   return {
     commanderName: commander.name,
     primaryThemes: themes,
     preferredTribes,
-    winConditions: detectWinConditions(commander),
+    winConditions,
     keyResources: detectKeyResources(commander, themes),
-    requiredPackages: detectRequiredPackages(commander, themes),
+    requiredPackages,
     tempo: detectTempo(commander, themes),
     curveShape,
     targetAvgCmc: detectTargetAvgCmc(curveShape),
@@ -256,5 +427,8 @@ export function getCommanderPlan(commander: CardInfo): CommanderPlan {
     commanderCheatsCreatures: commanderCheatsCreatures(commander),
     commanderReducesCost: commanderReducesCost(commander),
     pipIntensity: detectPipIntensity(commander),
+    roleTargetOverrides: detectRoleTargetOverrides(commander, themes, winConditions),
+    packageMinimums: detectPackageMinimums(themes, requiredPackages, winConditions),
+    winConditionTargets: detectWinConditionTargets(winConditions, themes),
   };
 }

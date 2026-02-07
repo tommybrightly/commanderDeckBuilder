@@ -2,7 +2,7 @@ import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getCommanderPlan } from "@/lib/mtg/commanderPlan";
+import { getCommanderPlanWithCache } from "@/lib/mtg/commanderProfileCache";
 import { getProfileTargets } from "@/lib/mtg/profileTargets";
 import { rankUpgradeSuggestions } from "@/lib/mtg/upgradeSuggestions";
 import { getCardByNameFromDb, dbCardToCardInfo } from "@/lib/mtg/cardDb";
@@ -63,7 +63,7 @@ export async function GET(
     return NextResponse.json({ suggestions: [], message: "Commander not in database." });
   }
 
-  const plan = getCommanderPlan(commanderInfo);
+  const plan = await getCommanderPlanWithCache(commanderInfo);
   const profile = getProfileTargets(plan, { enforceLegality: deck.legalityEnforced });
   const roleTargets = {
     ramp: profile.targetRamp,
