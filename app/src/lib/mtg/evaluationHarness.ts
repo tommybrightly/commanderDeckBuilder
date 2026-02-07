@@ -100,7 +100,7 @@ export function computeDeckMetrics(
     landCount >= profile.targetLandsMin && landCount <= profile.targetLandsMax;
   const manaStabilityScore = landInRange ? 1 : landCount < profile.targetLandsMin ? landCount / profile.targetLandsMin : 0;
 
-  const winconPresence = (counts.finisher ?? 0) + (counts.wincon ?? 0);
+  const winconPresence = counts.finisher ?? 0; // finisher family includes both finisher and wincon roles
   const interactionCoverage = INTERACTION_FAMILIES.reduce(
     (s, f) => s + (counts[f] ?? 0),
     0
