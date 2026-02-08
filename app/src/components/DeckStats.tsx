@@ -247,7 +247,7 @@ function CardHoverPreview({
   );
 }
 
-export function DeckListByType({ main, lands, showRole = true, showReason = false, compact }: DeckListByTypeProps) {
+export function DeckListByType({ main, lands, showRole = false, showReason = false, compact }: DeckListByTypeProps) {
   const [hovered, setHovered] = useState<{ name: string; imageUrl: string; left: number; top: number } | null>(null);
   const hideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 

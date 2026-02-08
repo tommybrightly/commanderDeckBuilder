@@ -130,7 +130,7 @@ export function DeckView({ deckId, commanderName, data, legalityEnforced, collec
         <h2 className="mb-4 text-xl font-semibold text-[var(--foreground)]">
           Deck list
         </h2>
-        <DeckListByType main={main} lands={lands} showRole showReason />
+        <DeckListByType main={main} lands={lands} showReason />
       </section>
       {collectionId && (
         <section className="mt-6" aria-label="Upgrade suggestions">

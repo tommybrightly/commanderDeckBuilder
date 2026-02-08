@@ -227,7 +227,7 @@ export function BuildClient() {
             />
           </div>
           <div className="mt-4">
-            <DeckListByType main={result.deck.main} lands={result.deck.lands} showRole compact />
+            <DeckListByType main={result.deck.main} lands={result.deck.lands} compact />
           </div>
         </div>
       </div>
