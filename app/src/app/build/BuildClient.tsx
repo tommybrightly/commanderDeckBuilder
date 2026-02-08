@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { signIn, useSession } from "next-auth/react";
 import { CommanderPicker } from "@/components/CommanderPicker";
 import { DeckStats, DeckListByType } from "@/components/DeckStats";
 import type { CommanderChoice, DeckArchetype } from "@/lib/mtg/types";
@@ -19,7 +20,7 @@ type CollectionRow = { id: string; name: string };
 
 type StreamEvent =
   | { type: "progress"; stage: string; progress: number; message?: string }
-  | { type: "result"; deckId: string; deck: DeckList; collectionId?: string }
+  | { type: "result"; deckId: string | null; deck: DeckList; collectionId?: string }
   | { type: "error"; error: string };
 
 export function BuildClient() {
@@ -27,7 +28,7 @@ export function BuildClient() {
   const presetCollectionId = searchParams.get("collectionId");
 
   const [collections, setCollections] = useState<CollectionRow[]>([]);
-  const [source, setSource] = useState<"saved" | "bulk">(presetCollectionId ? "saved" : "saved");
+  const [source, setSource] = useState<"saved" | "bulk">(presetCollectionId ? "saved" : "bulk");
   const [collectionId, setCollectionId] = useState(presetCollectionId ?? "");
   const [rawInput, setRawInput] = useState("");
   const [inputFormat, setInputFormat] = useState<"text" | "csv">("text");
@@ -36,21 +37,36 @@ export function BuildClient() {
   const [enforceLegality, setEnforceLegality] = useState(true);
   const [building, setBuilding] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<{ deckId: string; deck: DeckList; collectionId?: string } | null>(null);
+  const [result, setResult] = useState<{ deckId: string | null; deck: DeckList; collectionId?: string } | null>(null);
   const [progress, setProgress] = useState(0);
   const [progressMessage, setProgressMessage] = useState("");
+  const [saving, setSaving] = useState(false);
+  const { data: session, status: sessionStatus } = useSession();
 
   useEffect(() => {
+    if (sessionStatus !== "authenticated") return;
     fetch("/api/collections")
       .then((r) => r.json())
       .then((data) => {
         if (Array.isArray(data)) setCollections(data);
-      });
-  }, []);
+      })
+      .catch(() => {});
+  }, [sessionStatus]);
 
   useEffect(() => {
-    if (presetCollectionId) setCollectionId(presetCollectionId);
+    if (presetCollectionId) {
+      setCollectionId(presetCollectionId);
+      setSource("saved");
+    }
   }, [presetCollectionId]);
+
+  // When not signed in, only allow bulk (paste). Switch to bulk if they're on saved and log out.
+  useEffect(() => {
+    if (sessionStatus === "unauthenticated" && source === "saved") {
+      setSource("bulk");
+      setCollectionId("");
+    }
+  }, [sessionStatus, source]);
 
   const build = useCallback(async () => {
     if (!commander) {
@@ -116,7 +132,11 @@ export function BuildClient() {
             setProgress(event.progress);
             setProgressMessage(event.message ?? event.stage);
           } else if (event.type === "result") {
-            setResult({ deckId: event.deckId, deck: event.deck, collectionId: event.collectionId });
+            setResult({
+              deckId: event.deckId ?? null,
+              deck: event.deck,
+              collectionId: event.collectionId,
+            });
             setProgress(1);
             setProgressMessage("Done");
           } else if (event.type === "error") {
@@ -148,9 +168,48 @@ export function BuildClient() {
           </p>
         )}
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          <a href={`/decks/${result.deckId}`} className="btn-primary inline-block">
-            View saved deck
-          </a>
+          {result.deckId ? (
+            <a href={`/decks/${result.deckId}`} className="btn-primary inline-block">
+              View saved deck
+            </a>
+          ) : session ? (
+            <button
+              type="button"
+              disabled={saving}
+              onClick={async () => {
+                setSaving(true);
+                try {
+                  const res = await fetch("/api/decks", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      commanderName: result.deck.commander.name,
+                      data: result.deck,
+                      collectionId: result.collectionId ?? null,
+                      legalityEnforced: result.deck.legalityEnforced,
+                    }),
+                  });
+                  if (!res.ok) {
+                    const data = await res.json().catch(() => ({}));
+                    throw new Error((data as { error?: string }).error ?? "Failed to save");
+                  }
+                  const { id } = (await res.json()) as { id: string };
+                  window.location.href = `/decks/${id}`;
+                } catch (e) {
+                  setError(e instanceof Error ? e.message : "Failed to save");
+                } finally {
+                  setSaving(false);
+                }
+              }}
+              className="btn-primary"
+            >
+              {saving ? "Saving…" : "Save deck"}
+            </button>
+          ) : (
+            <button type="button" onClick={() => signIn()} className="btn-primary">
+              Sign in to save this deck
+            </button>
+          )}
           <button type="button" onClick={() => setResult(null)} className="btn-secondary">
             Build another
           </button>
@@ -195,23 +254,29 @@ export function BuildClient() {
         <label className="block text-sm font-medium text-[var(--foreground)]">
           Your bulk / collection
         </label>
-        <div className="mt-2 flex gap-2">
-          <button
-            type="button"
-            onClick={() => setSource("saved")}
-            className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${source === "saved" ? "bg-[var(--accent)] text-white" : "btn-secondary"}`}
-          >
-            Saved collection
-          </button>
-          <button
-            type="button"
-            onClick={() => setSource("bulk")}
-            className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${source === "bulk" ? "bg-[var(--accent)] text-white" : "btn-secondary"}`}
-          >
-            Paste or upload
-          </button>
-        </div>
-        {source === "saved" ? (
+        {session ? (
+          <div className="mt-2 flex gap-2">
+            <button
+              type="button"
+              onClick={() => setSource("saved")}
+              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${source === "saved" ? "bg-[var(--accent)] text-white" : "btn-secondary"}`}
+            >
+              Saved collection
+            </button>
+            <button
+              type="button"
+              onClick={() => setSource("bulk")}
+              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${source === "bulk" ? "bg-[var(--accent)] text-white" : "btn-secondary"}`}
+            >
+              Paste or upload
+            </button>
+          </div>
+        ) : (
+          <p className="mt-1 text-xs text-[var(--muted)]">
+            Sign in to build from a saved collection.
+          </p>
+        )}
+        {source === "saved" && session ? (
           <select
             value={collectionId}
             onChange={(e) => setCollectionId(e.target.value)}

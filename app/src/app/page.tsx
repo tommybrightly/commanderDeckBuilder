@@ -67,7 +67,7 @@ export default function Home() {
               Ready to build?
             </p>
             <p className="mt-1 text-sm text-[var(--muted)]">
-              Sign in with Google to save collections and decks.
+              Build from a pasted list anytime. Sign in with Google to save collections and decks.
             </p>
             <Link href="/build" className="btn-primary mt-5 inline-block">
               Build a deck

@@ -1,15 +1,8 @@
-import { redirect } from "next/navigation";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import { Header } from "@/components/Header";
 import { PageDirections } from "@/components/PageDirections";
 import { BuildClient } from "./BuildClient";
 
-export default async function BuildPage() {
-  const session = await getServerSession(authOptions);
-  if (!session) {
-    redirect("/");
-  }
+export default function BuildPage() {
   return (
     <div className="relative min-h-screen">
       <Header />

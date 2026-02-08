@@ -14,13 +14,6 @@ export const maxDuration = 300;
 
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return new Response(JSON.stringify({ type: "error", error: "Unauthorized" }) + "\n", {
-      status: 401,
-      headers: { "Content-Type": "application/x-ndjson" },
-    });
-  }
-
   const body = await req.json();
   const {
     collectionId,
@@ -55,6 +48,12 @@ export async function POST(req: Request) {
   let collection: { id: string; rawInput: string } | null = null;
 
   if (collectionId) {
+    if (!session?.user?.id) {
+      return new Response(
+        JSON.stringify({ type: "error", error: "Sign in to build from a saved collection." }) + "\n",
+        { status: 401, headers: { "Content-Type": "application/x-ndjson" } }
+      );
+    }
     const coll = await prisma.collection.findFirst({
       where: { id: collectionId, userId: session.user.id },
     });
@@ -75,7 +74,7 @@ export async function POST(req: Request) {
     owned = format === "csv" ? parseCsv(rawInput) : parseTextList(rawInput);
   } else {
     return new Response(
-      JSON.stringify({ type: "error", error: "Provide collectionId or rawInput" }) + "\n",
+      JSON.stringify({ type: "error", error: "Provide a pasted list or sign in and choose a saved collection." }) + "\n",
       { status: 400, headers: { "Content-Type": "application/x-ndjson" } }
     );
   }
@@ -239,16 +238,20 @@ export async function POST(req: Request) {
           });
           if (strategy) deckList.stats.strategyExplanation = strategy;
         }
-        const deck = await prisma.deck.create({
-          data: {
-            userId: session.user.id!,
-            collectionId: usedCollectionId,
-            commanderName: commander.name,
-            legalityEnforced: deckList.legalityEnforced,
-            data: JSON.parse(JSON.stringify(deckList)),
-          },
-        });
-        send({ type: "result", deckId: deck.id, deck: deckList, collectionId: usedCollectionId ?? undefined });
+        if (session?.user?.id) {
+          const deck = await prisma.deck.create({
+            data: {
+              userId: session.user.id,
+              collectionId: usedCollectionId,
+              commanderName: commander.name,
+              legalityEnforced: deckList.legalityEnforced,
+              data: JSON.parse(JSON.stringify(deckList)),
+            },
+          });
+          send({ type: "result", deckId: deck.id, deck: deckList, collectionId: usedCollectionId ?? undefined });
+        } else {
+          send({ type: "result", deckId: null, deck: deckList, collectionId: undefined });
+        }
       } catch (err) {
         const message = err instanceof Error ? err.message : "Build failed";
         send({ type: "error", error: message });
