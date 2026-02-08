@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { Header } from "@/components/Header";
 import { PageDirections } from "@/components/PageDirections";
 import { BuildClient } from "./BuildClient";
@@ -21,7 +22,9 @@ export default function BuildPage() {
           ]}
           className="mt-4 mb-8"
         />
-        <BuildClient />
+        <Suspense fallback={<div className="card mt-6 max-w-xl animate-pulse rounded-lg p-6" />}>
+          <BuildClient />
+        </Suspense>
       </main>
     </div>
   );
