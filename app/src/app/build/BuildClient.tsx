@@ -34,7 +34,7 @@ export function BuildClient() {
   const [inputFormat, setInputFormat] = useState<"text" | "csv">("text");
   const [commander, setCommander] = useState<CommanderChoice | null>(null);
   const [archetype, setArchetype] = useState<DeckArchetype>("balanced");
-  const [enforceLegality, setEnforceLegality] = useState(true);
+  const [enforceLegality, setEnforceLegality] = useState(false);
   const [building, setBuilding] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{ deckId: string | null; deck: DeckList; collectionId?: string } | null>(null);
