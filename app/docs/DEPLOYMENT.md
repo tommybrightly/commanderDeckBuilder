@@ -24,7 +24,7 @@ Railway gives you a Node app + persistent disk, so your SQLite database and sync
 
    Replace `YOUR_USERNAME` and `YOUR_REPO_NAME` with your GitHub username and repo name.
 
-**Important:** Make sure `app/.env` is **not** committed (it should be in `.gitignore`). You’ll add secrets in Railway instead.
+**Important:** Make sure `app/.env` is **not** committed (it should be in `.gitignore`). You'll add secrets in Railway instead.
 
 ### 2. Create a Railway project
 
@@ -95,6 +95,14 @@ Optional (for more sign-in options):
 ### 6. (Optional) Custom domain
 
 In Railway → your service → **Settings** → **Domains**, add your own domain and point your DNS to the value Railway shows.
+
+**If the domain reaches Railway but shows "not found" or a Railway error page:**
+
+- **Domain must be on the app service:** Add the custom domain under the **same service** that runs your Next.js app (the one with the Build/Start commands), not a different service or project.
+- **Exact hostname:** Add the **exact** hostname users type (e.g. `www.yourdomain.com` or `yourdomain.com`). If DNS forwards root to www, add `www.yourdomain.com` in Railway.
+- **One domain per service:** If you have multiple services, ensure the custom domain is only assigned to the web app service so Railway routes traffic to it.
+- **Redeploy after adding domain:** Sometimes a redeploy (or toggling the domain off/on in **Settings** → **Domains**) fixes routing. Check **Deployments** to confirm the latest deploy is active.
+- **Railway status:** Check [status.railway.app](https://status.railway.app) for incidents. If it’s still broken, open a ticket or post in [Railway’s Discord/Help](https://discord.gg/railway) with: project name, service name, and the exact domain you added.
 
 ---
 
