@@ -6,11 +6,16 @@ import { PrismaAdapter } from "@auth/prisma-adapter";
 import { prisma } from "@/lib/prisma";
 
 const providers = [];
+// allowDangerousEmailAccountLinking: lets the same email sign in with Google, Discord, or GitHub
+// without "OAuthAccountNotLinked" — otherwise users get blocked if they switch providers
+const linkByEmail = { allowDangerousEmailAccountLinking: true };
+
 if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
   providers.push(
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      ...linkByEmail,
     })
   );
 }
@@ -19,6 +24,7 @@ if (process.env.GITHUB_ID && process.env.GITHUB_SECRET) {
     GitHubProvider({
       clientId: process.env.GITHUB_ID,
       clientSecret: process.env.GITHUB_SECRET,
+      ...linkByEmail,
     })
   );
 }
@@ -27,6 +33,7 @@ if (process.env.DISCORD_CLIENT_ID && process.env.DISCORD_CLIENT_SECRET) {
     DiscordProvider({
       clientId: process.env.DISCORD_CLIENT_ID,
       clientSecret: process.env.DISCORD_CLIENT_SECRET,
+      ...linkByEmail,
     })
   );
 }
