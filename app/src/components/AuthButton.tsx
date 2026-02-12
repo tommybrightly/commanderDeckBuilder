@@ -84,7 +84,7 @@ export function AuthButton() {
                   signIn(p.id);
                 }}
               >
-                Continue with {PROVIDER_LABELS[p.id] ?? p.name}
+                Sign in with {PROVIDER_LABELS[p.id] ?? p.name}
               </button>
             ))}
           </div>
