@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { detectInputFormat } from "@/lib/mtg/parseCollection";
+import { detectInputFormat, removeCardFromRawInput } from "@/lib/mtg/parseCollection";
 
 const PREVIEW_W = 244;
 const PREVIEW_H = 340;
@@ -66,6 +66,7 @@ export function CollectionDetailClient({
   const [error, setError] = useState<string | null>(null);
   const [skippedCards, setSkippedCards] = useState<string[] | null>(null);
   const [search, setSearch] = useState("");
+  const [removingCard, setRemovingCard] = useState<string | null>(null);
   const router = useRouter();
   const [preview, setPreview] = useState<{ name: string; imageUrl: string; x: number; y: number } | null>(null);
   const hideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -113,6 +114,29 @@ export function CollectionDetailClient({
       setError(err instanceof Error ? err.message : "Failed to save");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleRemoveFromList = async (cardName: string, quantityToRemove: number) => {
+    setError(null);
+    setRemovingCard(cardName);
+    try {
+      const format = detectInputFormat(rawInput);
+      const newRawInput = removeCardFromRawInput(rawInput, format, cardName, quantityToRemove);
+      const res = await fetch(`/api/collections/${collectionId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rawInput: newRawInput.trim(), inputFormat: format }),
+      });
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({}));
+        throw new Error(e.error ?? "Failed to remove");
+      }
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to remove card");
+    } finally {
+      setRemovingCard(null);
     }
   };
 
@@ -269,9 +293,41 @@ export function CollectionDetailClient({
                   ) : (
                     <span className="h-16 w-[44px] shrink-0 rounded bg-[var(--card-border)]" aria-hidden />
                   )}
-                  <span className="text-[var(--foreground)]">
+                  <span className="min-w-0 flex-1 text-[var(--foreground)]">
                     <span className="w-8 shrink-0 text-[var(--muted)]">{c.quantity}×</span> {c.name}
                   </span>
+                  {c.quantity === 1 ? (
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveFromList(c.name, 1)}
+                      disabled={removingCard === c.name}
+                      className="shrink-0 rounded px-2 py-1 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-500/10 transition disabled:opacity-50"
+                      aria-label={`Remove ${c.name} from list`}
+                      title="Remove from list"
+                    >
+                      {removingCard === c.name ? "Removing…" : "Remove"}
+                    </button>
+                  ) : (
+                    <select
+                      value=""
+                      onChange={(e) => {
+                        const n = parseInt(e.target.value, 10);
+                        if (n > 0) handleRemoveFromList(c.name, n);
+                        e.target.value = "";
+                      }}
+                      disabled={removingCard === c.name}
+                      className="shrink-0 rounded border border-[var(--card-border)] bg-[var(--card)] px-2 py-1 text-xs text-red-600 dark:text-red-400 focus:border-[var(--accent)] focus:outline-none disabled:opacity-50"
+                      aria-label={`Remove copies of ${c.name}`}
+                      title="Remove from list"
+                    >
+                      <option value="">Remove…</option>
+                      {Array.from({ length: c.quantity }, (_, i) => i + 1).map((n) => (
+                        <option key={n} value={n}>
+                          Remove {n} {n === 1 ? "copy" : "copies"}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </li>
               ))}
           </ul>
