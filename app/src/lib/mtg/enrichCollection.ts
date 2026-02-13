@@ -14,7 +14,7 @@ export async function enrichCollection(
   rawInput: string,
   inputFormat: "text" | "csv",
   onProgress?: EnrichProgress
-): Promise<{ totalCards: number; resolved: number }> {
+): Promise<{ totalCards: number; resolved: number; skippedCards: string[] }> {
   const owned =
     inputFormat === "csv" ? parseCsv(rawInput) : parseTextList(rawInput);
   const uniqueNames = [...new Set(owned.map((c) => c.name.trim()).filter(Boolean))];
