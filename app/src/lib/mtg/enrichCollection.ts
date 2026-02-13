@@ -45,12 +45,6 @@ export async function enrichCollection(
     byCardId.set(cardId, (byCardId.get(cardId) ?? 0) + o.quantity);
   }
 
-  if (byCardId.size === 0) {
-    throw new Error(
-      "No card names could be resolved. Sync the card database from Settings, then try again. Use exact card names (e.g. 'Sol Ring', 'Lightning Bolt')."
-    );
-  }
-
   for (const [cardId, quantity] of byCardId) {
     await prisma.collectionItem.upsert({
       where: {

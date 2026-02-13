@@ -121,11 +121,10 @@ export async function POST(req: Request) {
             include: { card: true },
           });
           if (items.length === 0) {
-            send({
-              type: "error",
-              error:
-                "No cards in this collection. Sync the card database from Settings, then build again.",
-            });
+            const hint = skippedCards.length > 0
+              ? "No cards could be recognized. Use exact English names (e.g. Shock, Sol Ring). Non-English names aren't supported."
+              : "No cards in this collection. Sync the card database from Settings, then build again.";
+            send({ type: "error", error: hint });
             controller.close();
             return;
           }
