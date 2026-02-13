@@ -1,11 +1,51 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { detectInputFormat } from "@/lib/mtg/parseCollection";
 
-type CardRow = { name: string; quantity: number };
+const PREVIEW_W = 244;
+const PREVIEW_H = 340;
+
+function CardHoverPreview({
+  name,
+  imageUrl,
+  left,
+  top,
+  onClose,
+  onCancelClose,
+}: {
+  name: string;
+  imageUrl: string;
+  left: number;
+  top: number;
+  onClose: () => void;
+  onCancelClose?: () => void;
+}) {
+  return (
+    <div
+      className="fixed z-50 rounded-lg border-2 border-[var(--card-border)] bg-[var(--card)] p-3 shadow-2xl pointer-events-auto"
+      style={{ left, top }}
+      onMouseEnter={onCancelClose}
+      onMouseLeave={onClose}
+      role="tooltip"
+      aria-label={`Preview: ${name}`}
+    >
+      <img
+        src={imageUrl}
+        alt={name}
+        className="block rounded shadow-lg"
+        style={{ width: PREVIEW_W, height: PREVIEW_H, objectFit: "cover" }}
+      />
+      <p className="mt-2 max-w-[280px] truncate text-center text-sm font-medium text-[var(--foreground)]">
+        {name}
+      </p>
+    </div>
+  );
+}
+
+type CardRow = { name: string; quantity: number; imageUrl?: string };
 
 export function CollectionDetailClient({
   collectionId,
@@ -26,6 +66,20 @@ export function CollectionDetailClient({
   const [error, setError] = useState<string | null>(null);
   const [skippedCards, setSkippedCards] = useState<string[] | null>(null);
   const router = useRouter();
+  const [preview, setPreview] = useState<{ name: string; imageUrl: string; x: number; y: number } | null>(null);
+  const hideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showPreview = useCallback((name: string, imageUrl: string, x: number, y: number) => {
+    if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
+    setPreview({ name, imageUrl, x, y });
+  }, []);
+  const hidePreview = useCallback((delay = 0) => {
+    if (delay) {
+      hideTimeoutRef.current = setTimeout(() => setPreview(null), delay);
+    } else {
+      setPreview(null);
+    }
+  }, []);
 
   useEffect(() => {
     if (!editing) setEditRawInput(rawInput);
@@ -167,18 +221,50 @@ export function CollectionDetailClient({
             No cards resolved yet. Edit your bulk above and save, or sync the card database from Settings.
           </p>
         ) : (
-          <ul className="mt-4 max-h-96 overflow-auto space-y-1 font-mono text-sm">
+          <ul className="mt-4 max-h-[28rem] overflow-auto space-y-1.5 rounded bg-[var(--background)]/80 p-3">
             {cards
               .sort((a, b) => a.name.localeCompare(b.name))
               .map((c) => (
-                <li key={c.name} className="flex gap-2 text-[var(--foreground)]">
-                  <span className="w-8 shrink-0 text-[var(--muted)]">{c.quantity}×</span>
-                  <span>{c.name}</span>
+                <li key={c.name} className="flex items-center gap-3 py-1.5 text-sm">
+                  {c.imageUrl ? (
+                    <span
+                      className="relative inline-block cursor-pointer shrink-0"
+                      onMouseEnter={(e) => showPreview(c.name, c.imageUrl!, e.clientX, e.clientY)}
+                      onMouseMove={(e) => setPreview((p) => (p ? { ...p, x: e.clientX, y: e.clientY } : null))}
+                      onMouseLeave={() => hidePreview(200)}
+                    >
+                      <img
+                        src={c.imageUrl}
+                        alt=""
+                        className="h-16 w-[44px] rounded object-cover shadow-md border border-[var(--card-border)]"
+                        loading="lazy"
+                        title={c.name}
+                      />
+                    </span>
+                  ) : (
+                    <span className="h-16 w-[44px] shrink-0 rounded bg-[var(--card-border)]" aria-hidden />
+                  )}
+                  <span className="text-[var(--foreground)]">
+                    <span className="w-8 shrink-0 text-[var(--muted)]">{c.quantity}×</span> {c.name}
+                  </span>
                 </li>
               ))}
           </ul>
         )}
       </div>
+
+      {preview && (
+        <CardHoverPreview
+          name={preview.name}
+          imageUrl={preview.imageUrl}
+          left={preview.x}
+          top={preview.y}
+          onClose={() => hidePreview(0)}
+          onCancelClose={() => {
+            if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
+          }}
+        />
+      )}
     </div>
   );
 }

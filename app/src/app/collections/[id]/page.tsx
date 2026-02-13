@@ -29,6 +29,7 @@ export default async function CollectionDetailPage({
   const cards = collection.collectionItems.map((i) => ({
     name: i.card.name,
     quantity: i.quantity,
+    imageUrl: i.card.imageUrl ?? undefined,
   }));
   return (
     <div className="relative min-h-screen">
