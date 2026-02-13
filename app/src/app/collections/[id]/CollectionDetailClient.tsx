@@ -65,6 +65,7 @@ export function CollectionDetailClient({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [skippedCards, setSkippedCards] = useState<string[] | null>(null);
+  const [search, setSearch] = useState("");
   const router = useRouter();
   const [preview, setPreview] = useState<{ name: string; imageUrl: string; x: number; y: number } | null>(null);
   const hideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -116,6 +117,11 @@ export function CollectionDetailClient({
   };
 
   const totalCards = cards.reduce((s, c) => s + c.quantity, 0);
+  const searchLower = search.trim().toLowerCase();
+  const filteredCards = (searchLower
+    ? cards.filter((c) => c.name.toLowerCase().includes(searchLower))
+    : [...cards]
+  ).sort((a, b) => a.name.localeCompare(b.name));
 
   return (
     <div className="space-y-6">
@@ -216,15 +222,34 @@ export function CollectionDetailClient({
         <p className="mt-1 text-sm text-[var(--muted)]">
           Resolved cards from your bulk. Edit above to add or remove cards.
         </p>
+        {cards.length > 0 && (
+          <div className="mt-3">
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search cards…"
+              className="w-full rounded-lg border border-[var(--card-border)] bg-[var(--card)] px-3 py-2 text-sm text-[var(--foreground)] placeholder:text-[var(--muted)] focus:border-[var(--accent)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+              aria-label="Search cards in collection"
+            />
+            {search.trim() && (
+              <p className="mt-1 text-xs text-[var(--muted)]">
+                {filteredCards.length} of {cards.length} card{cards.length === 1 ? "" : "s"} match
+              </p>
+            )}
+          </div>
+        )}
         {cards.length === 0 ? (
           <p className="mt-4 text-sm text-[var(--muted)]">
             No cards resolved yet. Edit your bulk above and save, or sync the card database from Settings.
           </p>
+        ) : filteredCards.length === 0 ? (
+          <p className="mt-4 text-sm text-[var(--muted)]">
+            No cards match &quot;{search.trim()}&quot;
+          </p>
         ) : (
           <ul className="mt-4 max-h-[28rem] overflow-auto space-y-1.5 rounded bg-[var(--background)]/80 p-3">
-            {cards
-              .sort((a, b) => a.name.localeCompare(b.name))
-              .map((c) => (
+            {filteredCards.map((c) => (
                 <li key={c.name} className="flex items-center gap-3 py-1.5 text-sm">
                   {c.imageUrl ? (
                     <span
