@@ -39,12 +39,13 @@ const BUILD_QUIPS = [
   "Putting the final polish on your pile of cardboard glory…",
 ];
 
-function getBuildQuip(progress: number): string {
-  const idx = Math.min(
-    Math.floor(progress * BUILD_QUIPS.length),
-    BUILD_QUIPS.length - 1
-  );
-  return BUILD_QUIPS[idx] ?? BUILD_QUIPS[0]!;
+const QUIP_INTERVAL_MS = 3500;
+
+function pickRandomQuip(avoid?: string): string {
+  const filtered = avoid && BUILD_QUIPS.length > 1
+    ? BUILD_QUIPS.filter((q) => q !== avoid)
+    : BUILD_QUIPS;
+  return filtered[Math.floor(Math.random() * filtered.length)] ?? BUILD_QUIPS[0]!;
 }
 
 const ARCHETYPES: { value: DeckArchetype; label: string; hint: string }[] = [
@@ -79,6 +80,7 @@ export function BuildClient() {
   const [result, setResult] = useState<{ deckId: string | null; deck: DeckList; collectionId?: string } | null>(null);
   const [progress, setProgress] = useState(0);
   const [progressMessage, setProgressMessage] = useState("");
+  const [currentQuip, setCurrentQuip] = useState(BUILD_QUIPS[0]!);
   const [saving, setSaving] = useState(false);
   const { data: session, status: sessionStatus } = useSession();
 
@@ -439,7 +441,7 @@ export function BuildClient() {
             />
             <div className="min-w-0 flex-1 space-y-1">
               <p className="text-sm font-medium text-[var(--foreground)]">
-                {getBuildQuip(progress)}
+                {currentQuip}
               </p>
               <p className="text-xs text-[var(--muted)]" title={progressMessage}>
                 {progressMessage || "Building…"}
