@@ -206,7 +206,7 @@ export function BuildClient() {
               {saving ? "Saving…" : "Save deck"}
             </button>
           ) : (
-            <button type="button" onClick={() => signIn()} className="btn-primary">
+            <button type="button" onClick={() => signIn(undefined, { callbackUrl: "/build" })} className="btn-primary">
               Sign in to save this deck
             </button>
           )}

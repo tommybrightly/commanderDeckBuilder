@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { usePathname } from "next/navigation";
 import { signIn, signOut, useSession, getProviders } from "next-auth/react";
 import type { ClientSafeProvider } from "next-auth/react";
 
@@ -11,9 +12,11 @@ const PROVIDER_LABELS: Record<string, string> = {
 };
 
 export function AuthButton() {
+  const pathname = usePathname();
   const { data: session, status } = useSession();
   const [providers, setProviders] = useState<Record<string, ClientSafeProvider> | null>(null);
   const [open, setOpen] = useState(false);
+  const callbackUrl = pathname ?? "/";
 
   useEffect(() => {
     getProviders().then(setProviders);
@@ -81,7 +84,7 @@ export function AuthButton() {
                 className="block w-full px-4 py-2 text-left text-sm text-[var(--foreground)] hover:bg-white/5"
                 onClick={() => {
                   setOpen(false);
-                  signIn(p.id);
+                  signIn(p.id, { callbackUrl });
                 }}
               >
                 Sign in with {PROVIDER_LABELS[p.id] ?? p.name}
