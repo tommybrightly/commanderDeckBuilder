@@ -37,11 +37,27 @@ Build a 100-card Commander deck from the bulk cards you own. Sign in with Google
 
 ## Run
 
-```bash
-npm run dev
-```
+1. **First-time setup** (creates DB and runs migrations):
 
-Open [http://localhost:3000](http://localhost:3000). Sign in with Google, go to **Settings** and **Sync card database** once, then use **Collections** to add your card list, **Build** to pick a collection and commander and generate a deck, and **My Decks** to view saved decks.
+   ```bash
+   npm run dev:setup
+   ```
+
+   If you get P3009 (failed migration) or P3018 (table already exists): run `npx prisma migrate resolve --applied 20260205000000_add_commander_profile` to mark it applied, then `npx prisma migrate deploy` again. Or use `npx prisma migrate reset` to wipe and start fresh.
+
+2. **Start the dev server**:
+
+   ```bash
+   npm run dev
+   ```
+
+3. Open [http://localhost:3000](http://localhost:3000). Sign in with Google, go to **Settings** and **Sync card database** once, then use **Collections** to add your card list, **Build** to pick a collection and commander and generate a deck, and **My Decks** to view saved decks.
+
+### Local dev not working?
+
+- **Blank page or 500 errors**: Run `npm run dev:setup` (or `npx prisma migrate deploy`) to create the database. If migrations fail, try `npx prisma migrate reset` to start fresh.
+- **"Sync card database"**: Required before building decks. Go to Settings → Sync card database. First sync takes 2–5 minutes.
+- **Sign-in fails**: Ensure `.env` has valid `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `AUTH_SECRET`. Add `http://localhost:3000/api/auth/callback/google` as a redirect URI in Google Cloud Console.
 
 ## How it works
 

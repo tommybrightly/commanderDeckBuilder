@@ -206,6 +206,57 @@ function detectDelimiter(firstLine: string): "," | ";" | "\t" {
   return ",";
 }
 
+/**
+ * Serialize OwnedCard[] to text format: "qty name" or "qty name (SET)" per line.
+ */
+export function serializeToText(cards: OwnedCard[]): string {
+  return cards
+    .filter((c) => c.quantity > 0)
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((c) => (c.setCode ? `${c.quantity} ${c.name} (${c.setCode})` : `${c.quantity} ${c.name}`))
+    .join("\n");
+}
+
+/**
+ * Remove copies of a card from rawInput. Returns new rawInput.
+ * quantityToRemove: how many to remove (default 1).
+ * For CSV format, outputs simple "Name,Quantity" format to preserve data.
+ */
+export function removeCardFromRawInput(
+  rawInput: string,
+  format: "text" | "csv",
+  cardName: string,
+  quantityToRemove = 1
+): string {
+  const cards = format === "csv" ? parseCsv(rawInput) : parseTextList(rawInput);
+  const key = cardName.trim().toLowerCase();
+  const idx = cards.findIndex((c) => c.name.toLowerCase() === key);
+  if (idx < 0) return rawInput;
+  const c = cards[idx]!;
+  const toRemove = Math.min(quantityToRemove, c.quantity);
+  if (c.quantity <= toRemove) {
+    cards.splice(idx, 1);
+  } else {
+    c.quantity -= toRemove;
+  }
+  if (format === "text") return serializeToText(cards);
+  const hasSet = cards.some((o) => o.setCode);
+  const hasCollector = cards.some((o) => o.collectorNumber);
+  const header = hasSet && hasCollector
+    ? "Name,Quantity,Set,Collector Number"
+    : hasSet
+      ? "Name,Quantity,Set"
+      : "Name,Quantity";
+  const rows = cards.map((o) =>
+    hasSet && hasCollector
+      ? `${o.name},${o.quantity},${o.setCode ?? ""},${o.collectorNumber ?? ""}`
+      : hasSet
+        ? `${o.name},${o.quantity},${o.setCode ?? ""}`
+        : `${o.name},${o.quantity}`
+  );
+  return header + "\n" + rows.join("\n");
+}
+
 function parseCsvLine(line: string, delimiter: "," | ";" | "\t" = ","): string[] {
   const out: string[] = [];
   let cur = "";

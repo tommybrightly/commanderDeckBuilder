@@ -35,11 +35,11 @@ const BUILD_QUIPS = [
   "One more pass to make sure it's not just 99 random cards…",
   "Adding the secret sauce that makes a deck *chef's kiss*…",
   "Your future opponents have no idea what's coming…",
-  "Double-checking that we didn't accidentally add a 61st card…",
+  "Double-checking that we didn't accidentally add a 101st card…",
   "Putting the final polish on your pile of cardboard glory…",
 ];
 
-const QUIP_INTERVAL_MS = 3500;
+const QUIP_INTERVAL_MS = 8000;
 
 function pickRandomQuip(avoid?: string): string {
   const filtered = avoid && BUILD_QUIPS.length > 1
@@ -108,6 +108,16 @@ export function BuildClient() {
       setCollectionId("");
     }
   }, [sessionStatus, source]);
+
+  // Cycle quirky messages every 8s while building
+  useEffect(() => {
+    if (!building) return;
+    setCurrentQuip(pickRandomQuip());
+    const id = setInterval(() => {
+      setCurrentQuip((prev) => pickRandomQuip(prev));
+    }, QUIP_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [building]);
 
   const build = useCallback(async () => {
     if (!commander) {
