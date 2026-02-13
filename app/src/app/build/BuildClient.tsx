@@ -37,7 +37,7 @@ export function BuildClient() {
   const [enforceLegality, setEnforceLegality] = useState(false);
   const [building, setBuilding] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<{ deckId: string | null; deck: DeckList; collectionId?: string } | null>(null);
+  const [result, setResult] = useState<{ deckId: string | null; deck: DeckList; collectionId?: string; skippedCards?: string[] } | null>(null);
   const [progress, setProgress] = useState(0);
   const [progressMessage, setProgressMessage] = useState("");
   const [saving, setSaving] = useState(false);
