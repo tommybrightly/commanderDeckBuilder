@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --webpack",
+    "dev:setup": "prisma generate && prisma migrate deploy",
     "dev:turbo": "next dev",
     "build": "prisma generate && next build",
     "start": "next start",

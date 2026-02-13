@@ -25,6 +25,7 @@ export async function enrichCollection(
   const skippedCards = uniqueNames.filter((n) => !allCards.has(n.toLowerCase()));
 
   onProgress?.(uniqueNames.length, uniqueNames.length, "Saving collection items…");
+  await prisma.collectionItem.deleteMany({ where: { collectionId } });
   const oracleIds = [...new Set([...allCards.values()].map((c) => c.id))];
   const cardRows =
     oracleIds.length > 0

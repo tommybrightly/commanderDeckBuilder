@@ -184,7 +184,7 @@ export function CollectionsClient() {
                 className="card flex items-center justify-between gap-2 transition hover:border-[var(--accent)]/40"
               >
                 <Link
-                  href={`/build?collectionId=${c.id}`}
+                  href={`/collections/${c.id}`}
                   className="min-w-0 flex-1 px-4 py-3 transition hover:opacity-90"
                 >
                   <span className="font-medium text-[var(--foreground)]">{c.name}</span>
