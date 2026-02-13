@@ -1,6 +1,8 @@
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import { authOptions } from "@/lib/auth";
+
+export const maxDuration = 300;
 import { prisma } from "@/lib/prisma";
 import { enrichCollection } from "@/lib/mtg/enrichCollection";
 import { ensureCardDatabaseSynced } from "@/lib/mtg/syncCardDatabase";

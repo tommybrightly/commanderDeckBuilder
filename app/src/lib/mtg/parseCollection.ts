@@ -207,6 +207,27 @@ function detectDelimiter(firstLine: string): "," | ";" | "\t" {
 }
 
 /**
+ * Merge multiple OwnedCard arrays, coalescing duplicates by name (adds quantities).
+ */
+export function mergeOwnedCards(arrays: OwnedCard[][]): OwnedCard[] {
+  const byName = new Map<string, OwnedCard>();
+  for (const arr of arrays) {
+    for (const c of arr) {
+      const key = c.name.toLowerCase();
+      const existing = byName.get(key);
+      if (existing) {
+        existing.quantity += c.quantity;
+        if (c.setCode && !existing.setCode) existing.setCode = c.setCode;
+        if (c.collectorNumber && !existing.collectorNumber) existing.collectorNumber = c.collectorNumber;
+      } else {
+        byName.set(key, { ...c });
+      }
+    }
+  }
+  return Array.from(byName.values());
+}
+
+/**
  * Serialize OwnedCard[] to text format: "qty name" or "qty name (SET)" per line.
  */
 export function serializeToText(cards: OwnedCard[]): string {
