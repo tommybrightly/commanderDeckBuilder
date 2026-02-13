@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { detectInputFormat, mergeOwnedCards, parseCsv, parseTextList, serializeToText } from "@/lib/mtg/parseCollection";
 
 type CollectionRow = {
   id: string;
@@ -122,14 +123,12 @@ export function CollectionsClient() {
             <label
               className={`cursor-pointer rounded-lg px-3 py-1.5 text-sm font-medium transition ${activeTab === "csv" ? "bg-[var(--accent)] text-white" : "btn-secondary"}`}
             >
-              Upload CSV
+              Upload CSV (one or more)
               <input
                 type="file"
                 accept=".csv,.txt"
-                onChange={(e) => {
-                  handleFile(e);
-                  setActiveTab("csv");
-                }}
+                multiple
+                onChange={(e) => handleFile(e)}
                 className="sr-only"
               />
             </label>
