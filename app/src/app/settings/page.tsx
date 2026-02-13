@@ -25,7 +25,7 @@ export default async function SettingsPage() {
             <PageDirections
               title="How to use this page"
               steps={[
-                "Sync the card database so you can search commanders, build decks, and review collections. Run once after deploy.",
+                "Card database syncs automatically on first deploy. Use the Sync button to refresh or if you see card lookup errors.",
                 "Delete your account anytime: type DELETE in the box and click the button. You will be signed out and cannot undo this.",
               ]}
               className="mt-4 mb-8"

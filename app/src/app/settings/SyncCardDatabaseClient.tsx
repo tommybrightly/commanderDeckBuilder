@@ -61,7 +61,7 @@ export function SyncCardDatabaseClient() {
         Card database
       </h2>
       <p className="mt-1 text-sm text-[var(--muted)]">
-        Sync cards from Scryfall so you can search commanders, build decks, and review collections. Run this once after deploy, or again to refresh card data (e.g. new sets).
+        Sync runs automatically on first deploy. Use this to refresh card data (e.g. new sets) or if you see "cards not found" errors.
       </p>
       <button
         type="button"

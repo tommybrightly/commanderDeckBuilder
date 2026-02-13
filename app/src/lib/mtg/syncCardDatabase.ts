@@ -82,6 +82,34 @@ export async function runCardDatabaseSync(onProgress?: SyncProgress): Promise<nu
 let syncInProgress: Promise<void> | null = null;
 
 /**
+ * Start a sync in the background if the Card table is empty. Does not block.
+ * Used on app startup so the card database is ready without manual sync.
+ * Any request that needs cards will wait for this via ensureCardDatabaseSynced.
+ */
+export function startCardDatabaseSyncIfEmpty(): void {
+  prisma.card
+    .count()
+    .then((count) => {
+      if (count > 0) return;
+      if (syncInProgress) return;
+      const run = async () => {
+        try {
+          await runCardDatabaseSync((msg, p) => {
+            if (p === 1) console.log("[Card DB] Sync complete:", msg);
+          });
+        } catch (err) {
+          console.error("[Card DB] Startup sync failed:", err);
+        } finally {
+          syncInProgress = null;
+        }
+      };
+      syncInProgress = run();
+      console.log("[Card DB] Empty. Starting sync in background…");
+    })
+    .catch((err) => console.error("[Card DB] Startup check failed:", err));
+}
+
+/**
  * If the Card table is empty, run a full sync (or wait for an in-flight sync).
  * Call this before any operation that needs the card database (build deck, commander search).
  * Progress is reported only when this call starts the sync; concurrent callers just wait.
