@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { signIn, useSession } from "next-auth/react";
 import { CommanderPicker } from "@/components/CommanderPicker";
@@ -360,12 +360,17 @@ export function BuildClient() {
               >
                 CSV
               </button>
-              <label className="btn-secondary cursor-pointer inline-block text-sm">
-                Upload file
+              <label
+                className={`cursor-pointer rounded-lg px-3 py-1.5 text-sm font-medium transition ${inputFormat === "csv" ? "bg-[var(--accent)] text-white" : "btn-secondary"}`}
+              >
+                Upload CSV
                 <input
                   type="file"
                   accept=".csv,.txt"
-                  onChange={handleBulkFile}
+                  onChange={(e) => {
+                    handleBulkFile(e);
+                    setInputFormat("csv");
+                  }}
                   className="sr-only"
                 />
               </label>
@@ -373,7 +378,7 @@ export function BuildClient() {
             <textarea
               value={rawInput}
               onChange={(e) => setRawInput(e.target.value)}
-              placeholder={inputFormat === "csv" ? "Paste CSV or use Upload file" : "3 Lightning Bolt\n1 Sol Ring (C14)\nBack for More (OTP) 36"}
+              placeholder={inputFormat === "csv" ? "Paste CSV or click Upload CSV to choose a file" : "3 Lightning Bolt\n1 Sol Ring (C14)\nBack for More (OTP) 36"}
               rows={6}
               className="mt-2 w-full rounded-lg border border-[var(--card-border)] bg-[var(--card)] px-3 py-2 font-mono text-sm text-[var(--foreground)] placeholder:text-[var(--muted)] focus:border-[var(--accent)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
             />

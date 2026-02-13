@@ -119,31 +119,28 @@ export function CollectionsClient() {
             >
               Paste list
             </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab("csv")}
-              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${activeTab === "csv" ? "bg-[var(--accent)] text-white" : "btn-secondary"}`}
+            <label
+              className={`cursor-pointer rounded-lg px-3 py-1.5 text-sm font-medium transition ${activeTab === "csv" ? "bg-[var(--accent)] text-white" : "btn-secondary"}`}
             >
               Upload CSV
-            </button>
-            {activeTab === "csv" && (
               <input
                 type="file"
                 accept=".csv,.txt"
-                onChange={handleFile}
-                className="text-sm"
+                onChange={(e) => {
+                  handleFile(e);
+                  setActiveTab("csv");
+                }}
+                className="sr-only"
               />
-            )}
+            </label>
           </div>
-          {activeTab === "paste" && (
-            <textarea
-              value={rawInput}
-              onChange={(e) => setRawInput(e.target.value)}
-              placeholder="3 Lightning Bolt&#10;1 Sol Ring (C14)"
-              rows={8}
-              className="w-full rounded-lg border border-[var(--card-border)] bg-[var(--card)] px-3 py-2 font-mono text-sm text-[var(--foreground)] placeholder:text-[var(--muted)] focus:border-[var(--accent)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
-            />
-          )}
+          <textarea
+            value={rawInput}
+            onChange={(e) => setRawInput(e.target.value)}
+            placeholder={activeTab === "csv" ? "Paste CSV or click Upload CSV to choose a file" : "3 Lightning Bolt&#10;1 Sol Ring (C14)"}
+            rows={8}
+            className="w-full rounded-lg border border-[var(--card-border)] bg-[var(--card)] px-3 py-2 font-mono text-sm text-[var(--foreground)] placeholder:text-[var(--muted)] focus:border-[var(--accent)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+          />
           {error && (
             <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
           )}
