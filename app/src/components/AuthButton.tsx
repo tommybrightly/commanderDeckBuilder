@@ -46,7 +46,7 @@ export function AuthButton() {
   const list = providers ? Object.values(providers) : [];
   if (list.length === 0) {
     return (
-      <button type="button" className="btn-primary text-sm" onClick={() => signIn()}>
+      <button type="button" className="btn-primary text-sm" onClick={() => signIn(undefined, { callbackUrl })}>
         Sign in
       </button>
     );
@@ -56,7 +56,7 @@ export function AuthButton() {
       <button
         type="button"
         className="btn-primary text-sm"
-        onClick={() => signIn(list[0]!.id)}
+        onClick={() => signIn(list[0]!.id, { callbackUrl })}
       >
         Sign in with {PROVIDER_LABELS[list[0]!.id] ?? list[0]!.name}
       </button>
