@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { signIn, useSession } from "next-auth/react";
 import { CommanderPicker } from "@/components/CommanderPicker";
@@ -39,12 +39,13 @@ const BUILD_QUIPS = [
   "Putting the final polish on your pile of cardboard glory…",
 ];
 
-function getBuildQuip(progress: number): string {
-  const idx = Math.min(
-    Math.floor(progress * BUILD_QUIPS.length),
-    BUILD_QUIPS.length - 1
-  );
-  return BUILD_QUIPS[idx] ?? BUILD_QUIPS[0]!;
+const QUIP_INTERVAL_MS = 3500;
+
+function pickRandomQuip(avoid?: string): string {
+  const filtered = avoid && BUILD_QUIPS.length > 1
+    ? BUILD_QUIPS.filter((q) => q !== avoid)
+    : BUILD_QUIPS;
+  return filtered[Math.floor(Math.random() * filtered.length)] ?? BUILD_QUIPS[0]!;
 }
 
 const ARCHETYPES: { value: DeckArchetype; label: string; hint: string }[] = [
@@ -79,6 +80,7 @@ export function BuildClient() {
   const [result, setResult] = useState<{ deckId: string | null; deck: DeckList; collectionId?: string } | null>(null);
   const [progress, setProgress] = useState(0);
   const [progressMessage, setProgressMessage] = useState("");
+  const [currentQuip, setCurrentQuip] = useState(BUILD_QUIPS[0]!);
   const [saving, setSaving] = useState(false);
   const { data: session, status: sessionStatus } = useSession();
 
@@ -358,12 +360,17 @@ export function BuildClient() {
               >
                 CSV
               </button>
-              <label className="btn-secondary cursor-pointer inline-block text-sm">
-                Upload file
+              <label
+                className={`cursor-pointer rounded-lg px-3 py-1.5 text-sm font-medium transition ${inputFormat === "csv" ? "bg-[var(--accent)] text-white" : "btn-secondary"}`}
+              >
+                Upload CSV
                 <input
                   type="file"
                   accept=".csv,.txt"
-                  onChange={handleBulkFile}
+                  onChange={(e) => {
+                    handleBulkFile(e);
+                    setInputFormat("csv");
+                  }}
                   className="sr-only"
                 />
               </label>
@@ -371,7 +378,7 @@ export function BuildClient() {
             <textarea
               value={rawInput}
               onChange={(e) => setRawInput(e.target.value)}
-              placeholder={inputFormat === "csv" ? "Paste CSV or use Upload file" : "3 Lightning Bolt\n1 Sol Ring (C14)\nBack for More (OTP) 36"}
+              placeholder={inputFormat === "csv" ? "Paste CSV or click Upload CSV to choose a file" : "3 Lightning Bolt\n1 Sol Ring (C14)\nBack for More (OTP) 36"}
               rows={6}
               className="mt-2 w-full rounded-lg border border-[var(--card-border)] bg-[var(--card)] px-3 py-2 font-mono text-sm text-[var(--foreground)] placeholder:text-[var(--muted)] focus:border-[var(--accent)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
             />
@@ -439,7 +446,7 @@ export function BuildClient() {
             />
             <div className="min-w-0 flex-1 space-y-1">
               <p className="text-sm font-medium text-[var(--foreground)]">
-                {getBuildQuip(progress)}
+                {currentQuip}
               </p>
               <p className="text-xs text-[var(--muted)]" title={progressMessage}>
                 {progressMessage || "Building…"}

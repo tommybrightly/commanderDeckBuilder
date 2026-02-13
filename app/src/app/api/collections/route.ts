@@ -2,6 +2,9 @@ import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { enrichCollection } from "@/lib/mtg/enrichCollection";
+import { ensureCardDatabaseSynced } from "@/lib/mtg/syncCardDatabase";
+import { detectInputFormat } from "@/lib/mtg/parseCollection";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -22,7 +25,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const body = await req.json();
-  const { name, rawInput } = body as { name?: string; rawInput?: string };
+  const { name, rawInput, inputFormat } = body as {
+    name?: string;
+    rawInput?: string;
+    inputFormat?: "text" | "csv";
+  };
   if (!name || typeof rawInput !== "string") {
     return NextResponse.json(
       { error: "Missing name or rawInput" },
@@ -36,5 +43,14 @@ export async function POST(req: Request) {
       rawInput,
     },
   });
-  return NextResponse.json(collection);
+
+  await ensureCardDatabaseSynced();
+  const format = inputFormat ?? detectInputFormat(rawInput);
+  const enrichResult = await enrichCollection(collection.id, rawInput, format);
+
+  return NextResponse.json({
+    ...collection,
+    skippedCards: enrichResult.skippedCards,
+    resolvedCount: enrichResult.resolved,
+  });
 }

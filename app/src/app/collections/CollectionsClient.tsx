@@ -18,6 +18,7 @@ export function CollectionsClient() {
   const [activeTab, setActiveTab] = useState<"paste" | "csv">("paste");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [skippedCards, setSkippedCards] = useState<string[] | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -56,6 +57,7 @@ export function CollectionsClient() {
       return;
     }
     setError(null);
+    setSkippedCards(null);
     setSaving(true);
     try {
       const res = await fetch("/api/collections", {
@@ -75,6 +77,10 @@ export function CollectionsClient() {
       setList((prev) => [{ ...created, createdAt: created.createdAt, updatedAt: created.updatedAt }, ...prev]);
       setName("");
       setRawInput("");
+      setSkippedCards(created.skippedCards ?? null);
+      if (created.resolvedCount === 0 && created.skippedCards?.length) {
+        setError("No cards were recognized. Use exact English names (e.g. Shock, Sol Ring). Non-English names aren't supported.");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save");
     } finally {
@@ -113,33 +119,43 @@ export function CollectionsClient() {
             >
               Paste list
             </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab("csv")}
-              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${activeTab === "csv" ? "bg-[var(--accent)] text-white" : "btn-secondary"}`}
+            <label
+              className={`cursor-pointer rounded-lg px-3 py-1.5 text-sm font-medium transition ${activeTab === "csv" ? "bg-[var(--accent)] text-white" : "btn-secondary"}`}
             >
               Upload CSV
-            </button>
-            {activeTab === "csv" && (
               <input
                 type="file"
                 accept=".csv,.txt"
-                onChange={handleFile}
-                className="text-sm"
+                onChange={(e) => {
+                  handleFile(e);
+                  setActiveTab("csv");
+                }}
+                className="sr-only"
               />
-            )}
+            </label>
           </div>
-          {activeTab === "paste" && (
-            <textarea
-              value={rawInput}
-              onChange={(e) => setRawInput(e.target.value)}
-              placeholder="3 Lightning Bolt&#10;1 Sol Ring (C14)"
-              rows={8}
-              className="w-full rounded-lg border border-[var(--card-border)] bg-[var(--card)] px-3 py-2 font-mono text-sm text-[var(--foreground)] placeholder:text-[var(--muted)] focus:border-[var(--accent)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
-            />
-          )}
+          <textarea
+            value={rawInput}
+            onChange={(e) => setRawInput(e.target.value)}
+            placeholder={activeTab === "csv" ? "Paste CSV or click Upload CSV to choose a file" : "3 Lightning Bolt&#10;1 Sol Ring (C14)"}
+            rows={8}
+            className="w-full rounded-lg border border-[var(--card-border)] bg-[var(--card)] px-3 py-2 font-mono text-sm text-[var(--foreground)] placeholder:text-[var(--muted)] focus:border-[var(--accent)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+          />
           {error && (
             <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+          )}
+          {skippedCards && skippedCards.length > 0 && (
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
+              <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
+                {skippedCards.length} card{skippedCards.length === 1 ? "" : "s"} skipped (not found)
+              </p>
+              <p className="mt-1 text-xs text-[var(--muted)]">
+                Use exact English names (e.g. Shock, Sol Ring). Non-English names aren&apos;t supported.
+              </p>
+              <p className="mt-2 font-mono text-xs text-[var(--foreground)]">
+                {skippedCards.length <= 10 ? skippedCards.join(", ") : `${skippedCards.slice(0, 10).join(", ")} and ${skippedCards.length - 10} more`}
+              </p>
+            </div>
           )}
           <button
             type="button"
