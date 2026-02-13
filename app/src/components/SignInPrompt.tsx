@@ -1,5 +1,6 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { signIn } from "next-auth/react";
 
 interface SignInPromptProps {
@@ -8,6 +9,7 @@ interface SignInPromptProps {
 }
 
 export function SignInPrompt({ title, description }: SignInPromptProps) {
+  const pathname = usePathname();
   return (
     <div className="card mx-auto mt-8 max-w-md p-8 text-center">
       <h2 className="text-xl font-semibold text-[var(--foreground)]">{title}</h2>
@@ -16,7 +18,7 @@ export function SignInPrompt({ title, description }: SignInPromptProps) {
       )}
       <button
         type="button"
-        onClick={() => signIn()}
+        onClick={() => signIn(undefined, { callbackUrl: pathname ?? "/" })}
         className="btn-primary mt-6"
       >
         Sign in

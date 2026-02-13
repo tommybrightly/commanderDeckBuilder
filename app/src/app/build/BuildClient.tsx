@@ -8,6 +8,45 @@ import { DeckStats, DeckListByType } from "@/components/DeckStats";
 import type { CommanderChoice, DeckArchetype } from "@/lib/mtg/types";
 import type { DeckList } from "@/lib/mtg/types";
 
+const BUILD_QUIPS = [
+  "Wow, that's a lot of cards! We're working as fast as we can!",
+  "The little men in the computer are putting together your deck for you.",
+  "Shuffling through your collection like greased lightning…",
+  "Consulting the ancient spirits of deck building…",
+  "Teaching your cards to play nice together…",
+  "Counting to 99… and making it look easy.",
+  "Our hamsters are running at maximum speed.",
+  "Brewing the perfect blend of mana and mayhem…",
+  "Assembling your deck with the care of a master craftsman…",
+  "Reading through your deck list one card at a time…",
+  "Almost there! The deck is taking shape…",
+  "Polishing your pile of cardboard into something beautiful…",
+  "Summoning the perfect mana base from the aether…",
+  "Convincing your creatures to share the spotlight…",
+  "Making sure nobody gets mana screwed (we hope)…",
+  "Applying the ancient art of curve-ology…",
+  "Your commander is nodding approvingly from the sidelines…",
+  "Tapping into the collective wisdom of kitchen table magic…",
+  "Negotiating peace between your ramp and your draw spells…",
+  "Finding the right balance of gas and interaction…",
+  "Channeling the spirit of your local game store's best brewer…",
+  "Making sure every card earns its slot…",
+  "The lands are lining up. The creatures are ready. Almost…",
+  "One more pass to make sure it's not just 99 random cards…",
+  "Adding the secret sauce that makes a deck *chef's kiss*…",
+  "Your future opponents have no idea what's coming…",
+  "Double-checking that we didn't accidentally add a 61st card…",
+  "Putting the final polish on your pile of cardboard glory…",
+];
+
+function getBuildQuip(progress: number): string {
+  const idx = Math.min(
+    Math.floor(progress * BUILD_QUIPS.length),
+    BUILD_QUIPS.length - 1
+  );
+  return BUILD_QUIPS[idx] ?? BUILD_QUIPS[0]!;
+}
+
 const ARCHETYPES: { value: DeckArchetype; label: string; hint: string }[] = [
   { value: "balanced", label: "Balanced", hint: "25–30 creatures, general goodstuff" },
   { value: "tribal", label: "Tribal", hint: "30+ creatures, strong theme" },
@@ -206,7 +245,7 @@ export function BuildClient() {
               {saving ? "Saving…" : "Save deck"}
             </button>
           ) : (
-            <button type="button" onClick={() => signIn()} className="btn-primary">
+            <button type="button" onClick={() => signIn(undefined, { callbackUrl: "/build" })} className="btn-primary">
               Sign in to save this deck
             </button>
           )}
@@ -392,12 +431,23 @@ export function BuildClient() {
         <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
       )}
       {building && (
-        <div className="space-y-2">
-          <div className="flex justify-between gap-2 text-sm">
-            <span className="min-w-0 truncate text-[var(--muted)]" title={progressMessage}>
-              {progressMessage || "Building…"}
+        <div className="space-y-4">
+          <div className="flex items-start gap-3">
+            <div
+              className="mt-0.5 h-5 w-5 shrink-0 rounded-full border-2 border-[var(--accent)] border-t-transparent animate-spin"
+              aria-hidden
+            />
+            <div className="min-w-0 flex-1 space-y-1">
+              <p className="text-sm font-medium text-[var(--foreground)]">
+                {getBuildQuip(progress)}
+              </p>
+              <p className="text-xs text-[var(--muted)]" title={progressMessage}>
+                {progressMessage || "Building…"}
+              </p>
+            </div>
+            <span className="shrink-0 tabular-nums text-sm font-medium text-[var(--accent)]">
+              {Math.round(progress * 100)}%
             </span>
-            <span className="shrink-0 tabular-nums text-[var(--muted)]">{Math.round(progress * 100)}%</span>
           </div>
           <div className="h-2.5 w-full overflow-hidden rounded-full bg-[var(--card-border)]">
             <div

@@ -50,7 +50,6 @@ export const authOptions = {
   adapter: PrismaAdapter(prisma as Parameters<typeof PrismaAdapter>[0]),
   providers,
   session: { strategy: "database", maxAge: 30 * 24 * 60 * 60 },
-  pages: { signIn: "/" },
   trustHost: true, // required when behind Railway/proxy so callback URL is accepted
   callbacks: {
     session({ session, user }) {
