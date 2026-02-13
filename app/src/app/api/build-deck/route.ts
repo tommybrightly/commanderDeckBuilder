@@ -91,6 +91,7 @@ export async function POST(req: Request) {
         });
 
         let cardInfos: Map<string, CardInfo> | undefined;
+        let skippedCards: string[] = [];
 
         if (collectionId && collection) {
           const itemCount = await prisma.collectionItem.count({
@@ -98,7 +99,7 @@ export async function POST(req: Request) {
           });
           if (itemCount === 0) {
             send({ type: "progress", stage: "enriching", progress: 0, message: "Indexing collection…" });
-            await enrichCollection(
+            const enrichResult = await enrichCollection(
               collectionId,
               collection.rawInput,
               format,
@@ -111,6 +112,7 @@ export async function POST(req: Request) {
                 });
               }
             );
+            skippedCards = enrichResult.skippedCards ?? [];
             send({ type: "progress", stage: "enriching", progress: 1, message: "Indexed" });
           }
 
@@ -138,16 +140,18 @@ export async function POST(req: Request) {
           const uniqueNames = [...new Set(owned.map((c) => c.name.trim()).filter(Boolean))];
           const fromDb = await getCardsByNamesFromDb(uniqueNames);
           const missing = uniqueNames.filter((n) => !fromDb.has(n.toLowerCase()));
-          if (missing.length > 0) {
-            const list = missing.length <= 5 ? missing.join(", ") : `${missing.slice(0, 5).join(", ")} and ${missing.length - 5} more`;
+          skippedCards = missing;
+          const missingSet = new Set(missing.map((n) => n.toLowerCase()));
+          owned = owned.filter((o) => !missingSet.has(o.name.trim().toLowerCase()));
+          cardInfos = fromDb;
+          if (owned.length === 0) {
             send({
               type: "error",
-              error: `Cards not in database: ${list}. Sync the card database from Settings first.`,
+              error: "No cards could be found in the database. Use exact English card names (e.g. Shock, Sol Ring). Non-English names aren't supported.",
             });
             controller.close();
             return;
           }
-          cardInfos = fromDb;
         }
 
         const enforceLegalityOption = enforceLegality ?? true;
@@ -238,6 +242,7 @@ export async function POST(req: Request) {
           });
           if (strategy) deckList.stats.strategyExplanation = strategy;
         }
+        const deckWithSkipped = skippedCards.length > 0 ? { ...deckList, skippedCards } : deckList;
         if (session?.user?.id) {
           const deck = await prisma.deck.create({
             data: {
@@ -245,12 +250,12 @@ export async function POST(req: Request) {
               collectionId: usedCollectionId,
               commanderName: commander.name,
               legalityEnforced: deckList.legalityEnforced,
-              data: JSON.parse(JSON.stringify(deckList)),
+              data: JSON.parse(JSON.stringify(deckWithSkipped)),
             },
           });
-          send({ type: "result", deckId: deck.id, deck: deckList, collectionId: usedCollectionId ?? undefined });
+          send({ type: "result", deckId: deck.id, deck: deckWithSkipped, collectionId: usedCollectionId ?? undefined });
         } else {
-          send({ type: "result", deckId: null, deck: deckList, collectionId: undefined });
+          send({ type: "result", deckId: null, deck: deckWithSkipped, collectionId: undefined });
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : "Build failed";

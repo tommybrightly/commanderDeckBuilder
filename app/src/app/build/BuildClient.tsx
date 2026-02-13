@@ -20,7 +20,7 @@ type CollectionRow = { id: string; name: string };
 
 type StreamEvent =
   | { type: "progress"; stage: string; progress: number; message?: string }
-  | { type: "result"; deckId: string | null; deck: DeckList; collectionId?: string }
+  | { type: "result"; deckId: string | null; deck: DeckList; collectionId?: string; skippedCards?: string[] }
   | { type: "error"; error: string };
 
 export function BuildClient() {
@@ -136,6 +136,7 @@ export function BuildClient() {
               deckId: event.deckId ?? null,
               deck: event.deck,
               collectionId: event.collectionId,
+              skippedCards: event.deck.skippedCards ?? event.skippedCards ?? [],
             });
             setProgress(1);
             setProgressMessage("Done");
@@ -230,6 +231,19 @@ export function BuildClient() {
             <DeckListByType main={result.deck.main} lands={result.deck.lands} compact />
           </div>
         </div>
+        {result.skippedCards && result.skippedCards.length > 0 && (
+          <div className="card mt-4 border-amber-500/30 bg-amber-500/5 p-4">
+            <p className="font-medium text-amber-700 dark:text-amber-400">
+              {result.skippedCards.length} card{result.skippedCards.length === 1 ? "" : "s"} skipped (not found)
+            </p>
+            <p className="mt-1 text-sm text-[var(--muted)]">
+              These names weren&apos;t in the database — use exact English names (e.g. Shock, Sol Ring). Non-English names aren&apos;t supported.
+            </p>
+            <p className="mt-2 text-sm font-mono text-[var(--foreground)]">
+              {result.skippedCards.length <= 10 ? result.skippedCards.join(", ") : `${result.skippedCards.slice(0, 10).join(", ")} and ${result.skippedCards.length - 10} more`}
+            </p>
+          </div>
+        )}
       </div>
     );
   }

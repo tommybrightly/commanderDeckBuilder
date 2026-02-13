@@ -117,6 +117,8 @@ export interface DeckList {
     strategyExplanation?: string;
   };
   legalityEnforced: boolean;
+  /** Card names that couldn't be resolved (e.g. non-English, typos). Skipped from build. */
+  skippedCards?: string[];
 }
 
 /** Deck style / archetype; influences creature counts, type caps, and what we prioritize. */
