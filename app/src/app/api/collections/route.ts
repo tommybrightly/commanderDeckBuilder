@@ -1,6 +1,10 @@
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import { authOptions } from "@/lib/auth";
+
+export const maxDuration = 300;
+export const dynamic = "force-dynamic";
+
 import { prisma } from "@/lib/prisma";
 import { enrichCollection } from "@/lib/mtg/enrichCollection";
 import { ensureCardDatabaseSynced } from "@/lib/mtg/syncCardDatabase";
@@ -30,26 +34,33 @@ export async function POST(req: Request) {
     rawInput?: string;
     inputFormat?: "text" | "csv";
   };
-  if (!name || typeof rawInput !== "string") {
+  if (!name || typeof name !== "string" || !name.trim()) {
     return NextResponse.json(
-      { error: "Missing name or rawInput" },
+      { error: "Missing name" },
+      { status: 400 }
+    );
+  }
+  if (typeof rawInput !== "string") {
+    return NextResponse.json(
+      { error: "Missing rawInput" },
       { status: 400 }
     );
   }
   const collection = await prisma.collection.create({
     data: {
       userId: session.user.id,
-      name: name.slice(0, 200),
-      rawInput,
+      name: name.trim().slice(0, 200),
+      rawInput: rawInput.trim(),
     },
   });
-
   await ensureCardDatabaseSynced();
   const format = inputFormat ?? detectInputFormat(rawInput);
-  const enrichResult = await enrichCollection(collection.id, rawInput, format);
-
+  const enrichResult = await enrichCollection(collection.id, rawInput.trim(), format);
   return NextResponse.json({
-    ...collection,
+    id: collection.id,
+    name: collection.name,
+    createdAt: collection.createdAt,
+    updatedAt: collection.updatedAt,
     skippedCards: enrichResult.skippedCards,
     resolvedCount: enrichResult.resolved,
   });

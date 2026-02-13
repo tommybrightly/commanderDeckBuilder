@@ -20,11 +20,12 @@ export async function enrichCollection(
   const uniqueNames = [...new Set(owned.map((c) => c.name.trim()).filter(Boolean))];
   const totalCards = owned.reduce((s, c) => s + c.quantity, 0);
 
-  onProgress?.(0, uniqueNames.length, "Resolving cards from database…");
+  const totalResolve = uniqueNames.length;
+  onProgress?.(0, totalResolve, "Resolving cards from database…");
   const allCards = await getCardsByNamesFromDb(uniqueNames);
   const skippedCards = uniqueNames.filter((n) => !allCards.has(n.toLowerCase()));
+  onProgress?.(totalResolve, totalResolve, "Resolved. Preparing to save…");
 
-  onProgress?.(uniqueNames.length, uniqueNames.length, "Saving collection items…");
   await prisma.collectionItem.deleteMany({ where: { collectionId } });
   const oracleIds = [...new Set([...allCards.values()].map((c) => c.id))];
   const cardRows =
@@ -46,7 +47,11 @@ export async function enrichCollection(
     byCardId.set(cardId, (byCardId.get(cardId) ?? 0) + o.quantity);
   }
 
-  for (const [cardId, quantity] of byCardId) {
+  const entries = [...byCardId.entries()];
+  const totalSave = entries.length;
+  const totalSteps = totalResolve + totalSave;
+  for (let i = 0; i < entries.length; i++) {
+    const [cardId, quantity] = entries[i]!;
     await prisma.collectionItem.upsert({
       where: {
         collectionId_cardId: { collectionId, cardId },
@@ -54,6 +59,10 @@ export async function enrichCollection(
       create: { collectionId, cardId, quantity },
       update: { quantity },
     });
+    const reportInterval = totalSave <= 50 ? 5 : totalSave <= 200 ? 15 : 50;
+    if (onProgress && (i % reportInterval === 0 || i === entries.length - 1)) {
+      onProgress(totalResolve + i + 1, totalSteps, `Saving ${i + 1}/${totalSave} cards…`);
+    }
   }
 
   return { totalCards, resolved: byCardId.size, skippedCards };
