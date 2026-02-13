@@ -3,6 +3,7 @@ import { authOptions } from "@/lib/auth";
 import { Header } from "@/components/Header";
 import { PageDirections } from "@/components/PageDirections";
 import { SignInPrompt } from "@/components/SignInPrompt";
+import { SyncCardDatabaseClient } from "./SyncCardDatabaseClient";
 import { DeleteAccountClient } from "./DeleteAccountClient";
 
 export default async function SettingsPage() {
@@ -24,11 +25,12 @@ export default async function SettingsPage() {
             <PageDirections
               title="How to use this page"
               steps={[
-                "This page lets you permanently delete your account and all associated data (collections and decks).",
-                "Type DELETE in the box and click the button to confirm. You will be signed out and cannot undo this.",
+                "Card database syncs automatically on first deploy. Use the Sync button to refresh or if you see card lookup errors.",
+                "Delete your account anytime: type DELETE in the box and click the button. You will be signed out and cannot undo this.",
               ]}
               className="mt-4 mb-8"
             />
+            <SyncCardDatabaseClient />
             <DeleteAccountClient />
           </>
         )}

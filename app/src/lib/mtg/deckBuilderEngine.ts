@@ -223,6 +223,7 @@ export async function buildDeck(params: {
   const archetype = options.archetype ?? "balanced";
 
   let cardInfos: Map<string, CardInfo>;
+  let skippedCards: string[] = [];
   if (preloadedCardInfos && preloadedCardInfos.size > 0) {
     onProgress?.("fetching", 1, "Using saved card data");
     cardInfos = preloadedCardInfos;
@@ -230,11 +231,7 @@ export async function buildDeck(params: {
     const uniqueNames = [...new Set(owned.map((c) => c.name))];
     onProgress?.("fetching", 0, "Loading cards from database…");
     cardInfos = await getCardsByNamesFromDb(uniqueNames);
-    const missing = uniqueNames.filter((n) => !cardInfos.has(n.toLowerCase()));
-    if (missing.length > 0) {
-      const list = missing.length <= 5 ? missing.join(", ") : `${missing.slice(0, 5).join(", ")} and ${missing.length - 5} more`;
-      throw new Error(`Cards not in database: ${list}. Sync the card database from Settings first.`);
-    }
+    skippedCards = uniqueNames.filter((n) => !cardInfos.has(n.toLowerCase()));
     onProgress?.("fetching", 1, "Cards loaded");
   }
 
@@ -784,6 +781,7 @@ export async function buildDeck(params: {
       ...(shortBy != null && { shortBy }),
     },
     legalityEnforced: enforceLegality,
+    ...(skippedCards.length > 0 && { skippedCards }),
   };
 }
 

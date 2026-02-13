@@ -22,14 +22,7 @@ export async function enrichCollection(
 
   onProgress?.(0, uniqueNames.length, "Resolving cards from database…");
   const allCards = await getCardsByNamesFromDb(uniqueNames);
-  const missing = uniqueNames.filter((n) => !allCards.has(n.toLowerCase()));
-
-  if (missing.length > 0) {
-    const list = missing.length <= 5 ? missing.join(", ") : `${missing.slice(0, 5).join(", ")} and ${missing.length - 5} more`;
-    throw new Error(
-      `Some cards weren't found in the card database: ${list}. Sync the card database from Settings first, or check exact card names (e.g. "Sol Ring", "Lightning Bolt").`
-    );
-  }
+  const skippedCards = uniqueNames.filter((n) => !allCards.has(n.toLowerCase()));
 
   onProgress?.(uniqueNames.length, uniqueNames.length, "Saving collection items…");
   const oracleIds = [...new Set([...allCards.values()].map((c) => c.id))];
@@ -68,5 +61,5 @@ export async function enrichCollection(
     });
   }
 
-  return { totalCards, resolved: byCardId.size };
+  return { totalCards, resolved: byCardId.size, skippedCards };
 }
